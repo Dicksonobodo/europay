@@ -1,0 +1,6 @@
+/* App-level styles */
+.page-container {
+  min-height: 100vh;
+  background-color: var(--bg-primary);
+  padding-bottom: 96px;
+}
