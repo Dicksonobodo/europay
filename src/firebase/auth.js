@@ -2,11 +2,11 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  sendEmailVerification,
 } from 'firebase/auth';
 import { auth, db } from './config';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 
-// Generate Italian-style IBAN: IT + 2 check digits + 1 letter + 10 digits + 12 digits
 const generateIBAN = () => {
   const checkDigits = String(Math.floor(10 + Math.random() * 90));
   const cin = String.fromCharCode(65 + Math.floor(Math.random() * 26));
@@ -20,6 +20,8 @@ export const registerUser = async (email, password, fullName) => {
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const user = userCredential.user;
 
+  await sendEmailVerification(user);
+
   const cardNumber = Math.floor(1000 + Math.random() * 9000);
   const iban = generateIBAN();
 
@@ -32,13 +34,32 @@ export const registerUser = async (email, password, fullName) => {
     role: 'user',
     cardNumber,
     iban,
+    emailVerified: false,
+    isFrozen: false,
+    isSuspended: false,
+    dailyLimit: 1000,
     createdAt: serverTimestamp(),
   });
 
   return user;
 };
 
-export const loginUser = (email, password) =>
-  signInWithEmailAndPassword(auth, email, password);
+export const loginUser = async (email, password) => {
+  const cred = await signInWithEmailAndPassword(auth, email, password);
+  try {
+    await addDoc(collection(db, 'users', cred.user.uid, 'loginActivity'), {
+      timestamp: serverTimestamp(),
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+    });
+  } catch (_) {}
+  return cred;
+};
+
+export const resendVerificationEmail = async () => {
+  if (auth.currentUser) {
+    await sendEmailVerification(auth.currentUser);
+  }
+};
 
 export const logoutUser = () => signOut(auth);

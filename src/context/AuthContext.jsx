@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { getUser } from '../firebase/firestore';
@@ -11,8 +11,8 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const refreshUserData = async () => {
-    if (currentUser) {
-      const data = await getUser(currentUser.uid);
+    if (auth.currentUser) {
+      const data = await getUser(auth.currentUser.uid);
       setUserData(data);
     }
   };

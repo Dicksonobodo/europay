@@ -9,7 +9,7 @@ const useUser = () => {
 
   useEffect(() => {
     if (!currentUser) return;
-    const unsub = getTransactions(currentUser.uid, (txs) => {
+    const unsub = getTransactions(currentUser.uid, 2, (txs) => {
       setTransactions(txs);
       setLoading(false);
     });
