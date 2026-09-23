@@ -44,6 +44,13 @@ export const getAllTransactions = (uid, callback) => {
   });
 };
 
+const notifyTransactionRefresh = (uid) => {
+  if (typeof window === 'undefined') return;
+  const payload = { uid, ts: Date.now() };
+  window.dispatchEvent(new CustomEvent('europay-tx-refresh', { detail: payload }));
+  localStorage.setItem('europay_tx_refresh', JSON.stringify(payload));
+};
+
 export const getAllTransactionsList = async (uid) => {
   const snap = await getDocs(
     query(collection(db, 'users', uid, 'transactions'), orderBy('date', 'desc'))
@@ -55,10 +62,12 @@ export const updateTransactionDate = async (uid, txId, dateValue) => {
   const parsed = dateValue instanceof Date ? dateValue : new Date(dateValue);
   if (Number.isNaN(parsed.getTime())) throw new Error('Invalid date');
   await updateDoc(doc(db, 'users', uid, 'transactions', txId), { date: Timestamp.fromDate(parsed) });
+  notifyTransactionRefresh(uid);
 };
 
 export const deleteTransaction = async (uid, txId) => {
   await deleteDoc(doc(db, 'users', uid, 'transactions', txId));
+  notifyTransactionRefresh(uid);
 };
 
 const getTodaySpent = async (uid) => {

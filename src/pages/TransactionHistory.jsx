@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, X, Copy, Check } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
@@ -17,6 +17,7 @@ const TransactionHistory = () => {
   const [copied, setCopied] = useState(false);
   const [filter, setFilter] = useState('all'); // all | credit | debit
   const [dateDraft, setDateDraft] = useState('');
+  const transactionUnsubRef = useRef(null);
 
   const fmt = (n) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
@@ -26,13 +27,42 @@ const TransactionHistory = () => {
     return localDate.toISOString().slice(0, 16);
   };
 
-  useEffect(() => {
+  const refreshTransactions = () => {
     if (!currentUser) return;
-    const unsub = getAllTransactions(currentUser.uid, (txs) => {
+    transactionUnsubRef.current?.();
+    transactionUnsubRef.current = getAllTransactions(currentUser.uid, (txs) => {
       setTransactions(txs);
       setLoading(false);
     });
-    return unsub;
+  };
+
+  useEffect(() => {
+    if (!currentUser) return;
+    refreshTransactions();
+
+    const handleTxRefresh = (event) => {
+      const uid = event.detail?.uid;
+      if (uid === currentUser.uid) refreshTransactions();
+    };
+
+    const handleStorageRefresh = (event) => {
+      if (event.key !== 'europay_tx_refresh') return;
+      try {
+        const payload = JSON.parse(event.newValue || '{}');
+        if (payload.uid === currentUser.uid) refreshTransactions();
+      } catch {
+        // ignore malformed payloads
+      }
+    };
+
+    window.addEventListener('europay-tx-refresh', handleTxRefresh);
+    window.addEventListener('storage', handleStorageRefresh);
+
+    return () => {
+      transactionUnsubRef.current?.();
+      window.removeEventListener('europay-tx-refresh', handleTxRefresh);
+      window.removeEventListener('storage', handleStorageRefresh);
+    };
   }, [currentUser]);
 
   const filtered = transactions.filter((tx) => {
