@@ -272,6 +272,7 @@ const Profile = () => {
             </div>
 
             {/* Upload photo button — visible fallback */}
+            {/*
             <button
               onClick={handlePhotoClick}
               disabled={uploadingPhoto}
@@ -302,6 +303,7 @@ const Profile = () => {
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>JPG, PNG or GIF · Max 5MB</p>
               </div>
             </button>
+            */}
 
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{userData?.fullName}</p>
