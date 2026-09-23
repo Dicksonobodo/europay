@@ -225,6 +225,10 @@ export const markNotificationRead = async (uid, notifId) => {
   await updateDoc(doc(db, 'users', uid, 'notifications', notifId), { read: true });
 };
 
+export const deleteNotification = async (uid, notifId) => {
+  await deleteDoc(doc(db, 'users', uid, 'notifications', notifId));
+};
+
 export const markAllNotificationsRead = async (uid) => {
   const snap = await getDocs(
     query(collection(db, 'users', uid, 'notifications'), where('read', '==', false))

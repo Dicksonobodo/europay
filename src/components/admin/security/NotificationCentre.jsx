@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Bell, ArrowLeft, Check } from 'lucide-react';
-import { getNotifications, markNotificationRead, markAllNotificationsRead } from '../../../firebase/firestore';
+import { Bell, ArrowLeft, Check, Trash2 } from 'lucide-react';
+import { getNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification } from '../../../firebase/firestore';
 import useAuth from '../../../hooks/useAuth';
 
 const NotificationCentre = ({ onBack }) => {
@@ -30,6 +30,10 @@ const NotificationCentre = ({ onBack }) => {
 
   const handleMarkRead = async (id) => {
     await markNotificationRead(currentUser.uid, id);
+  };
+
+  const handleDelete = async (id) => {
+    await deleteNotification(currentUser.uid, id);
   };
 
   const handleMarkAll = async () => {
@@ -121,6 +125,29 @@ const NotificationCentre = ({ onBack }) => {
                   })}
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(n.id);
+                }}
+                aria-label="Delete notification"
+                style={{
+                  background: 'rgba(239,68,68,0.08)',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                  borderRadius: 10,
+                  padding: 8,
+                  cursor: 'pointer',
+                  color: '#f87171',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  marginTop: 2,
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
           ))
         )}
