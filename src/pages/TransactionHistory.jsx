@@ -90,6 +90,7 @@ const TransactionHistory = () => {
     const nextDate = dateDraft || formatDateInputValue(selected.date);
     if (!nextDate) return;
     await updateTransactionDate(currentUser.uid, selected.id, new Date(nextDate));
+    refreshTransactions();
     setTransactions((prev) => prev.map((tx) => tx.id === selected.id ? { ...tx, date: new Date(nextDate) } : tx));
     setSelected(null);
   };

@@ -172,6 +172,19 @@ const AdminPanel = () => {
     }
   };
 
+  const notifyTransactionHistoryRefresh = (uid) => {
+    if (typeof window === 'undefined') return;
+
+    const payload = { uid, ts: Date.now() };
+    window.dispatchEvent(
+      new CustomEvent('europay-tx-refresh', { detail: payload })
+    );
+    localStorage.setItem(
+      'europay_tx_refresh',
+      JSON.stringify(payload)
+    );
+  };
+
   // Only changes the input.
   // It does NOT save to Firebase until the Save button is clicked.
   const handleHistoryDateChange = (tx, value) => {
@@ -204,7 +217,10 @@ const AdminPanel = () => {
         parsedValue
       );
 
-      // Update the displayed transaction immediately.
+      notifyTransactionHistoryRefresh(historyUser.uid);
+
+      await openUserHistory(historyUser);
+
       setHistoryTxs((prev) =>
         prev.map((item) =>
           item.id === tx.id
@@ -216,7 +232,6 @@ const AdminPanel = () => {
         )
       );
 
-      // Clear the temporary input value.
       setHistoryDateInputs((prev) => {
         const updated = { ...prev };
 
@@ -226,7 +241,6 @@ const AdminPanel = () => {
       });
 
       alert('Transaction date updated successfully.');
-
     } catch (error) {
       console.error(
         'Failed to update transaction date:',
