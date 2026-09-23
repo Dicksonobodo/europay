@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, X, Copy, Check } from 'lucide-react';
+import { ArrowLeft, X, Copy, Check, Trash2 } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import { getAllTransactions, updateTransactionDate, deleteTransaction } from '../firebase/firestore';
 import TransactionItem from '../components/dashboard/TransactionItem';
@@ -160,8 +160,33 @@ const TransactionHistory = () => {
               </p>
               <div style={{ background: 'var(--bg-card)', borderRadius: 20, padding: '0 16px', border: '1px solid var(--border)' }}>
                 {txs.map((tx, i) => (
-                  <div key={tx.id} style={{ borderBottom: i < txs.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                    <TransactionItem tx={tx} onClick={() => setSelected(tx)} />
+                  <div key={tx.id} style={{ borderBottom: i < txs.length - 1 ? '1px solid var(--border)' : 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <TransactionItem tx={tx} onClick={() => setSelected(tx)} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteTransaction(currentUser.uid, tx.id).then(() => refreshTransactions());
+                      }}
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 10,
+                        border: '1px solid rgba(239,68,68,0.3)',
+                        background: 'rgba(239,68,68,0.1)',
+                        color: '#ef4444',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                      aria-label={`Delete transaction ${tx.description}`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 ))}
               </div>
