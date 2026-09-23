@@ -43,9 +43,14 @@ body {
   position: relative;
 }
 
-input, textarea {
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+input, textarea, select {
   outline: none;
   font-family: inherit;
+  font-size: 16px !important;
 }
 
 button {
