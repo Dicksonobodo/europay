@@ -216,12 +216,15 @@ const Profile = () => {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 border: '2px solid rgba(124,58,237,0.5)',
                 overflow: 'hidden',
-              }}>
+                cursor: 'pointer',
+              }}
+                onClick={handlePhotoClick}
+              >
                 {userData?.photoURL ? (
                   <img
                     src={userData.photoURL}
                     alt="Profile"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 18 }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : (
                   <span style={{ fontSize: 24, fontWeight: 800, color: '#fff' }}>
@@ -240,24 +243,25 @@ const Profile = () => {
                 )}
               </div>
 
-              {/* Camera button */}
+              {/* Camera button — made bigger and more visible */}
               <button
                 onClick={handlePhotoClick}
                 disabled={uploadingPhoto}
                 style={{
-                  position: 'absolute', bottom: -4, right: -4,
-                  width: 24, height: 24,
-                  background: '#7c3aed',
+                  position: 'absolute', bottom: -6, right: -6,
+                  width: 28, height: 28,
+                  background: 'linear-gradient(135deg, #7c3aed, #5b21b6)',
                   borderRadius: '50%',
                   border: '2px solid #0f0f1a',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(124,58,237,0.5)',
+                  zIndex: 10,
                 }}
               >
-                <Camera size={11} color="#fff" />
+                <Camera size={13} color="#fff" />
               </button>
 
-              {/* Hidden file input */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -266,6 +270,38 @@ const Profile = () => {
                 style={{ display: 'none' }}
               />
             </div>
+
+            {/* Upload photo button — visible fallback */}
+            <button
+              onClick={handlePhotoClick}
+              disabled={uploadingPhoto}
+              style={{
+                width: '100%', marginBottom: 16,
+                background: 'var(--bg-card)',
+                border: '1px dashed rgba(124,58,237,0.4)',
+                borderRadius: 14, padding: '13px 20px',
+                display: 'flex', alignItems: 'center', gap: 12,
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{
+                width: 36, height: 36,
+                background: 'rgba(124,58,237,0.15)',
+                borderRadius: 10,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {uploadingPhoto
+                  ? <Loader size={16} color="#a78bfa" style={{ animation: 'spin 0.8s linear infinite' }} />
+                  : <Camera size={16} color="#a78bfa" />
+                }
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <p style={{ fontSize: 14, fontWeight: 600, color: '#a78bfa' }}>
+                  {uploadingPhoto ? 'Uploading…' : userData?.photoURL ? 'Change Profile Photo' : 'Upload Profile Photo'}
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>JPG, PNG or GIF · Max 5MB</p>
+              </div>
+            </button>
 
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{userData?.fullName}</p>
