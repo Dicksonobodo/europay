@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Settings, Bell, Shield, HelpCircle, Users, Lock, MessageCircle,
   Copy, Check, LogOut, ChevronRight, ShieldCheck, Fingerprint,
-  Activity, Snowflake, Sliders, Camera, Loader,
+  Activity, Snowflake, Sliders, Camera, LoaderCircle,
 } from 'lucide-react';
 import { logoutUser } from '../firebase/auth';
 import { freezeCard, setDailyLimit, updateProfilePicture } from '../firebase/firestore';
@@ -237,7 +237,7 @@ const Profile = () => {
                     background: 'rgba(0,0,0,0.6)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <Loader size={20} color="#fff" style={{ animation: 'spin 0.8s linear infinite' }} />
+                    <LoaderCircle size={20} color="#fff" style={{ animation: 'spin 0.8s linear infinite' }} />
                     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                   </div>
                 )}
@@ -291,7 +291,7 @@ const Profile = () => {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 {uploadingPhoto
-                  ? <Loader size={16} color="#a78bfa" style={{ animation: 'spin 0.8s linear infinite' }} />
+                  ? <LoaderCircle size={16} color="#a78bfa" style={{ animation: 'spin 0.8s linear infinite' }} />
                   : <Camera size={16} color="#a78bfa" />
                 }
               </div>
