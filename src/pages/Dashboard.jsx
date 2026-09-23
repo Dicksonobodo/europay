@@ -46,10 +46,8 @@ const Dashboard = () => {
 
   if (showNotifications) return <NotificationCentre onBack={() => setShowNotifications(false)} />;
 
-  const isTier2 = (userData?.tier ?? 1) >= 2;
-
   const actions = [
-    ...(isTier2 ? [{ icon: ArrowLeftRight, label: 'Transfer', path: '/transfer', color: '#7c3aed' }] : []),
+    { icon: ArrowLeftRight, label: 'Transfer', path: '/transfer', color: '#7c3aed' },
     { icon: ArrowDownCircle, label: 'Withdraw', path: '/withdraw', color: '#5b21b6' },
     { icon: HandCoins, label: 'Request', path: '/request', color: '#6d28d9' },
     { icon: Repeat, label: 'Schedule', path: '/scheduled', color: '#4c1d95' },

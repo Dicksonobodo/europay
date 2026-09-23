@@ -19,6 +19,7 @@ const Transfer = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [tierModal, setTierModal] = useState(userData?.tier === 1);
 
   const quickAmounts = [50, 100, 250, 500];
   const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
@@ -53,18 +54,13 @@ const Transfer = () => {
     setLoading(false);
   };
 
-  if (!isTier2) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '56px 20px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-      <div style={{ width: 72, height: 72, background: 'rgba(124,58,237,0.12)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-        <ArrowLeftRight size={28} color="#a78bfa" />
-      </div>
-      <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>Tier 2 required</h2>
-      <p style={{ color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.6, maxWidth: 320, marginBottom: 24 }}>
-        Only Tier 2 accounts can send transfers. Upgrade your account to unlock this feature.
-      </p>
-      <Button onClick={() => navigate('/profile')} fullWidth>Go to Profile</Button>
-    </div>
-  );
+  const openTransfer = () => {
+    if (!isTier2) {
+      setTierModal(true);
+      return;
+    }
+    setConfirm(true);
+  };
 
   if (success) return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -196,12 +192,27 @@ const Transfer = () => {
               </div>
             )}
 
-            <Button onClick={() => { setError(''); setConfirm(true); }} disabled={!amount || parseFloat(amount) <= 0} fullWidth>
+            <Button onClick={() => { setError(''); openTransfer(); }} disabled={!amount || parseFloat(amount) <= 0} fullWidth>
               Continue
             </Button>
           </>
         )}
       </div>
+
+      <Modal open={tierModal} title="Upgrade Required">
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ width: 64, height: 64, background: 'rgba(245,158,11,0.12)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <ArrowLeftRight size={28} color="#f59e0b" />
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>
+            Transfers are only available for <strong style={{ color: '#f59e0b' }}>Tier 2</strong> accounts. Contact support to upgrade.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <Button onClick={() => navigate('/dashboard')} variant="secondary" fullWidth>Back</Button>
+          <Button onClick={() => { setTierModal(false); navigate('/support'); }} fullWidth>Contact Support</Button>
+        </div>
+      </Modal>
 
       {/* Confirm Modal */}
       <Modal open={confirm} onClose={() => setConfirm(false)} title="Confirm Transfer">
