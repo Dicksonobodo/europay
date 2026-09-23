@@ -100,9 +100,10 @@ const AdminPanel = () => {
 
   const handleHistoryDateChange = async (tx, value) => {
     if (!historyUser || !value) return;
+    const parsedValue = new Date(value);
     setHistoryDateInputs((prev) => ({ ...prev, [tx.id]: value }));
-    await updateTransactionDate(historyUser.uid, tx.id, new Date(value));
-    await openUserHistory(historyUser);
+    setHistoryTxs((prev) => prev.map((item) => item.id === tx.id ? { ...item, date: parsedValue } : item));
+    await updateTransactionDate(historyUser.uid, tx.id, parsedValue);
   };
 
   const handleHistoryDelete = async (tx) => {
