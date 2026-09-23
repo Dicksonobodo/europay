@@ -221,7 +221,7 @@ const Profile = () => {
                   <img
                     src={userData.photoURL}
                     alt="Profile"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 18 }}
                   />
                 ) : (
                   <span style={{ fontSize: 24, fontWeight: 800, color: '#fff' }}>
