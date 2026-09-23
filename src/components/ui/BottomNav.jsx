@@ -24,9 +24,9 @@ const BottomNav = () => {
       backdropFilter: 'blur(20px)',
       borderTop: '1px solid var(--border)',
       display: 'flex',
-      justifyContent: 'space-around',
+      justifyContent: 'flex-start',
       alignItems: 'center',
-      padding: '10px 0 20px',
+      padding: '10px 0 20px 12px',
       zIndex: 100,
     }}>
       {tabs.map(({ icon: Icon, label, path }) => {
@@ -43,7 +43,7 @@ const BottomNav = () => {
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              padding: '6px 16px',
+              padding: '6px 18px',
               borderRadius: 12,
               transition: 'all 0.2s',
             }}
