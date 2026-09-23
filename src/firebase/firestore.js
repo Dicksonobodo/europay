@@ -374,3 +374,8 @@ export const getAdminStats = async () => {
   const frozenUsers = users.filter((u) => u.isFrozen).length;
   return { totalUsers, totalBalance, tier2Users, suspendedUsers, frozenUsers };
 };
+
+// ── Profile Picture ───────────────────────────────────────────
+export const updateProfilePicture = async (uid, photoURL) => {
+  await updateDoc(doc(db, 'users', uid), { photoURL });
+};

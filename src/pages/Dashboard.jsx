@@ -101,8 +101,13 @@ const Dashboard = () => {
               background: 'linear-gradient(135deg, #7c3aed, #2d1b69)',
               borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
               border: '1px solid rgba(124,58,237,0.3)',
+              overflow: 'hidden',
             }}>
-              <span style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{firstName[0]?.toUpperCase()}</span>
+              {userData?.photoURL ? (
+                <img src={userData.photoURL} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} />
+              ) : (
+                <span style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{firstName[0]?.toUpperCase()}</span>
+              )}
             </div>
           </div>
         </div>

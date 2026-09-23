@@ -1,18 +1,21 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Settings, Bell, Shield, HelpCircle, Users, Lock, MessageCircle,
   Copy, Check, LogOut, ChevronRight, ShieldCheck, Fingerprint,
-  Activity, Snowflake, Sliders,
+  Activity, Snowflake, Sliders, Camera, Loader,
 } from 'lucide-react';
 import { logoutUser } from '../firebase/auth';
-import { freezeCard, setDailyLimit } from '../firebase/firestore';
+import { freezeCard, setDailyLimit, updateProfilePicture } from '../firebase/firestore';
 import useAuth from '../hooks/useAuth';
 import BottomNav from '../components/ui/BottomNav';
 import Modal from '../components/ui/Modal';
-import { PinSetup } from '../components/admin/security/PinLock';
-import LoginActivity from '../components/admin/security/LoginActivity';
-import NotificationCentre from '../components/admin/security/NotificationCentre';
+import { PinSetup } from '../components/security/PinLock';
+import LoginActivity from '../components/security/LoginActivity';
+import NotificationCentre from '../components/security/NotificationCentre';
+
+const CLOUDINARY_CLOUD = 'gq3ylbtt';
+const CLOUDINARY_PRESET = 'europay_uploads';
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -28,6 +31,9 @@ const Profile = () => {
   const [freezeLoading, setFreezeLoading] = useState(false);
   const [limitLoading, setLimitLoading] = useState(false);
   const [pinSaved, setPinSaved] = useState(!!localStorage.getItem('europay_pin'));
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState('');
+  const fileInputRef = useRef(null);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(userData?.cardNumber?.toString() || '');
@@ -63,6 +69,52 @@ const Profile = () => {
     setNewLimit('');
   };
 
+  const handlePhotoClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('Please select an image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setPhotoError('Image must be under 5MB');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setPhotoError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', CLOUDINARY_PRESET);
+      formData.append('folder', 'europay/profiles');
+
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`,
+        { method: 'POST', body: formData }
+      );
+
+      if (!res.ok) throw new Error('Upload failed');
+
+      const data = await res.json();
+      await updateProfilePicture(currentUser.uid, data.secure_url);
+      await refreshUserData();
+    } catch (err) {
+      setPhotoError('Upload failed. Please try again.');
+    }
+
+    setUploadingPhoto(false);
+    // Reset input so same file can be selected again
+    e.target.value = '';
+  };
+
   const joined = userData?.createdAt?.toDate?.()?.toLocaleDateString('en-GB', {
     day: '2-digit', month: 'long', year: 'numeric',
   }) || 'N/A';
@@ -78,7 +130,6 @@ const Profile = () => {
       onSkip={() => setShowPinSetup(false)}
     />
   );
-
   if (showActivity) return <LoginActivity onBack={() => setShowActivity(false)} />;
   if (showNotifications) return <NotificationCentre onBack={() => setShowNotifications(false)} />;
 
@@ -155,19 +206,76 @@ const Profile = () => {
           border: '1px solid rgba(124,58,237,0.3)', marginBottom: 16,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-            <div style={{
-              width: 60, height: 60,
-              background: 'linear-gradient(135deg, #7c3aed, #2d1b69)',
-              borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: '1px solid rgba(124,58,237,0.4)',
-            }}>
-              <span style={{ fontSize: 22, fontWeight: 800, color: '#fff' }}>{userData?.fullName?.[0] || 'U'}</span>
+
+            {/* Profile picture */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div style={{
+                width: 64, height: 64,
+                background: 'linear-gradient(135deg, #7c3aed, #2d1b69)',
+                borderRadius: 20,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: '2px solid rgba(124,58,237,0.5)',
+                overflow: 'hidden',
+              }}>
+                {userData?.photoURL ? (
+                  <img
+                    src={userData.photoURL}
+                    alt="Profile"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <span style={{ fontSize: 24, fontWeight: 800, color: '#fff' }}>
+                    {userData?.fullName?.[0] || 'U'}
+                  </span>
+                )}
+                {uploadingPhoto && (
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'rgba(0,0,0,0.6)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Loader size={20} color="#fff" style={{ animation: 'spin 0.8s linear infinite' }} />
+                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                  </div>
+                )}
+              </div>
+
+              {/* Camera button */}
+              <button
+                onClick={handlePhotoClick}
+                disabled={uploadingPhoto}
+                style={{
+                  position: 'absolute', bottom: -4, right: -4,
+                  width: 24, height: 24,
+                  background: '#7c3aed',
+                  borderRadius: '50%',
+                  border: '2px solid #0f0f1a',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <Camera size={11} color="#fff" />
+              </button>
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoChange}
+                style={{ display: 'none' }}
+              />
             </div>
-            <div>
+
+            <div style={{ flex: 1 }}>
               <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{userData?.fullName}</p>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{userData?.email}</p>
+              {photoError && (
+                <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{photoError}</p>
+              )}
             </div>
           </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ background: 'rgba(124,58,237,0.12)', borderRadius: 12, padding: '12px 14px', border: '1px solid rgba(124,58,237,0.2)' }}>
               <p style={{ fontSize: 10, color: 'rgba(167,139,250,0.7)', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>Tier</p>
