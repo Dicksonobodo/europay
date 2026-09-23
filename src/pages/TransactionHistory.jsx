@@ -86,9 +86,11 @@ const TransactionHistory = () => {
   };
 
   const handleSaveTransactionDate = async () => {
-    if (!selected || !dateDraft) return;
-    await updateTransactionDate(currentUser.uid, selected.id, new Date(dateDraft));
-    setTransactions((prev) => prev.map((tx) => tx.id === selected.id ? { ...tx, date: new Date(dateDraft) } : tx));
+    if (!selected) return;
+    const nextDate = dateDraft || formatDateInputValue(selected.date);
+    if (!nextDate) return;
+    await updateTransactionDate(currentUser.uid, selected.id, new Date(nextDate));
+    setTransactions((prev) => prev.map((tx) => tx.id === selected.id ? { ...tx, date: new Date(nextDate) } : tx));
     setSelected(null);
   };
 

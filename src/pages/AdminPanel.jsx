@@ -103,8 +103,10 @@ const AdminPanel = () => {
   };
 
   const handleHistoryDateSave = async (tx) => {
-    if (!historyUser || !historyDateInputs[tx.id]) return;
-    await updateTransactionDate(historyUser.uid, tx.id, new Date(historyDateInputs[tx.id]));
+    if (!historyUser) return;
+    const rawValue = historyDateInputs[tx.id] ?? formatDateInputValue(tx.date);
+    if (!rawValue) return;
+    await updateTransactionDate(historyUser.uid, tx.id, new Date(rawValue));
     await openUserHistory(historyUser);
   };
 
@@ -348,7 +350,7 @@ const AdminPanel = () => {
                 </div>
                 <input
                   type="datetime-local"
-                  value={historyDateInputs[tx.id] || formatDateInputValue(tx.date)}
+                  value={historyDateInputs[tx.id] ?? formatDateInputValue(tx.date)}
                   onChange={(e) => handleHistoryDateChange(tx.id, e.target.value)}
                   style={{ width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 10px', color: 'var(--text-primary)', marginBottom: 8 }}
                 />
