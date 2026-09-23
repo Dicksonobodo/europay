@@ -10,9 +10,9 @@ import { freezeCard, setDailyLimit, updateProfilePicture } from '../firebase/fir
 import useAuth from '../hooks/useAuth';
 import BottomNav from '../components/ui/BottomNav';
 import Modal from '../components/ui/Modal';
-import { PinSetup } from '../components/security/PinLock';
-import LoginActivity from '../components/security/LoginActivity';
-import NotificationCentre from '../components/security/NotificationCentre';
+import { PinSetup } from '../components/admin/security/PinLock';
+import LoginActivity from '../components/admin/security/LoginActivity';
+import NotificationCentre from '../components/admin/security/NotificationCentre';
 
 const CLOUDINARY_CLOUD = 'gq3ylbtt';
 const CLOUDINARY_PRESET = 'europay_uploads';
