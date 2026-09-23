@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, X, Copy, Check } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
-import { getAllTransactions } from '../firebase/firestore';
+import { getAllTransactions, updateTransactionDate, deleteTransaction } from '../firebase/firestore';
 import TransactionItem from '../components/dashboard/TransactionItem';
 import Modal from '../components/ui/Modal';
 import { getCategoryInfo } from '../utils/categories';
@@ -16,8 +16,15 @@ const TransactionHistory = () => {
   const [selected, setSelected] = useState(null);
   const [copied, setCopied] = useState(false);
   const [filter, setFilter] = useState('all'); // all | credit | debit
+  const [dateDraft, setDateDraft] = useState('');
 
   const fmt = (n) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0);
+
+  const formatDateInputValue = (dateValue) => {
+    const d = dateValue?.toDate?.() || new Date(dateValue || Date.now());
+    const localDate = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
+    return localDate.toISOString().slice(0, 16);
+  };
 
   useEffect(() => {
     if (!currentUser) return;
@@ -47,6 +54,26 @@ const TransactionHistory = () => {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const handleSaveTransactionDate = async () => {
+    if (!selected || !dateDraft) return;
+    await updateTransactionDate(currentUser.uid, selected.id, new Date(dateDraft));
+    setTransactions((prev) => prev.map((tx) => tx.id === selected.id ? { ...tx, date: new Date(dateDraft) } : tx));
+    setSelected(null);
+  };
+
+  const handleDeleteTransaction = async () => {
+    if (!selected) return;
+    await deleteTransaction(currentUser.uid, selected.id);
+    setTransactions((prev) => prev.filter((tx) => tx.id !== selected.id));
+    setSelected(null);
+  };
+
+  useEffect(() => {
+    if (selected) {
+      setDateDraft(formatDateInputValue(selected.date));
+    }
+  }, [selected]);
 
   const cat = selected ? getCategoryInfo(selected.description) : null;
   const isCredit = selected?.type === 'credit';

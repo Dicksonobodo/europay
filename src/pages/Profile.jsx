@@ -351,7 +351,7 @@ const Profile = () => {
         <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '16px 20px', border: '1px solid var(--border)', marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ flex: 1, marginRight: 12 }}>
-              <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>IBAN</p>
+              <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Account number</p>
               <p style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa', letterSpacing: 1, lineHeight: 1.6 }}>
                 {formatIban(userData?.iban)}
               </p>

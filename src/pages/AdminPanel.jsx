@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, DollarSign, BarChart2, Shield } from 'lucide-react';
 import FundUserForm from '../components/admin/FundUserForm';
 import AuditLog from '../components/admin/AuditLog';
+import Modal from '../components/ui/Modal';
 import {
   getAllUsers, upgradeToTier2, downgradeToTier1,
   suspendUser, setDailyLimit, getAdminStats, logAdminAction,
+  getAllTransactionsList, updateUserJoinedDate, updateTransactionDate, deleteTransaction,
 } from '../firebase/firestore';
 import useAuth from '../hooks/useAuth';
 
@@ -19,8 +21,18 @@ const AdminPanel = () => {
   const [stats, setStats] = useState(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [showAudit, setShowAudit] = useState(false);
+  const [historyUser, setHistoryUser] = useState(null);
+  const [historyTxs, setHistoryTxs] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyDateInputs, setHistoryDateInputs] = useState({});
 
   const fmt = (n) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0);
+
+  const formatDateInputValue = (dateValue) => {
+    const d = dateValue?.toDate?.() || new Date(dateValue || Date.now());
+    const localDate = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
+    return localDate.toISOString().slice(0, 16);
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -69,6 +81,37 @@ const AdminPanel = () => {
     await logAdminAction(userData.uid, userData.fullName, `Set daily limit to €${val}`, u.fullName, `Email: ${u.email}`);
     await fetchUsers();
     setLimitInputs((prev) => ({ ...prev, [u.uid]: '' }));
+  };
+
+  const handleJoinedDateSave = async (u, value) => {
+    if (!value) return;
+    await updateUserJoinedDate(u.uid, new Date(value));
+    await fetchUsers();
+  };
+
+  const openUserHistory = async (u) => {
+    setHistoryLoading(true);
+    const txs = await getAllTransactionsList(u.uid);
+    setHistoryTxs(txs);
+    setHistoryUser(u);
+    setHistoryDateInputs({});
+    setHistoryLoading(false);
+  };
+
+  const handleHistoryDateChange = (txId, value) => {
+    setHistoryDateInputs((prev) => ({ ...prev, [txId]: value }));
+  };
+
+  const handleHistoryDateSave = async (tx) => {
+    if (!historyUser || !historyDateInputs[tx.id]) return;
+    await updateTransactionDate(historyUser.uid, tx.id, new Date(historyDateInputs[tx.id]));
+    await openUserHistory(historyUser);
+  };
+
+  const handleHistoryDelete = async (tx) => {
+    if (!historyUser) return;
+    await deleteTransaction(historyUser.uid, tx.id);
+    await openUserHistory(historyUser);
   };
 
   if (showAudit) return <AuditLog onBack={() => setShowAudit(false)} />;
@@ -193,6 +236,9 @@ const AdminPanel = () => {
                     <div>
                       <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{u.fullName}</p>
                       <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{u.email}</p>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                        Joined: {u.createdAt?.toDate?.()?.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) || 'N/A'}
+                      </p>
                       <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                         <span style={{
                           fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
@@ -259,6 +305,22 @@ const AdminPanel = () => {
                           fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                         }}>Set Limit</button>
                       </div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          type="datetime-local"
+                          value={u.createdAt?.toDate?.() ? formatDateInputValue(u.createdAt) : ''}
+                          onChange={(e) => handleJoinedDateSave(u, e.target.value)}
+                          style={{
+                            flex: 1, background: 'var(--bg-secondary)', border: '1px solid var(--border-light)',
+                            borderRadius: 10, padding: '8px 10px', fontSize: 12, color: 'var(--text-primary)'
+                          }}
+                        />
+                        <button onClick={() => openUserHistory(u)} style={{
+                          background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)',
+                          borderRadius: 10, padding: '8px 12px', color: '#a78bfa',
+                          fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        }}>View History</button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -267,6 +329,35 @@ const AdminPanel = () => {
           </div>
         )}
       </div>
+
+      <Modal open={!!historyUser} onClose={() => setHistoryUser(null)} title={historyUser ? `${historyUser.fullName}'s transactions` : 'User transactions'}>
+        {historyLoading ? (
+          <p style={{ color: 'var(--text-secondary)', padding: '12px 0' }}>Loading history…</p>
+        ) : historyTxs.length === 0 ? (
+          <p style={{ color: 'var(--text-secondary)', padding: '12px 0' }}>No transactions found.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 420, overflowY: 'auto' }}>
+            {historyTxs.map((tx) => (
+              <div key={tx.id} style={{ background: 'var(--bg-secondary)', borderRadius: 12, padding: 12, border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{tx.description}</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{tx.type === 'credit' ? 'Received' : 'Sent'} · €{tx.amount}</p>
+                  </div>
+                  <button onClick={() => handleHistoryDelete(tx)} style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '6px 10px', color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+                </div>
+                <input
+                  type="datetime-local"
+                  value={historyDateInputs[tx.id] || formatDateInputValue(tx.date)}
+                  onChange={(e) => handleHistoryDateChange(tx.id, e.target.value)}
+                  style={{ width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 10px', color: 'var(--text-primary)', marginBottom: 8 }}
+                />
+                <button onClick={() => handleHistoryDateSave(tx)} style={{ width: '100%', background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 8, padding: '8px', color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Save date</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

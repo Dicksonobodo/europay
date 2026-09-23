@@ -1,7 +1,7 @@
 import {
   doc, getDoc, getDocs, collection, updateDoc, increment,
   addDoc, serverTimestamp, query, orderBy, limit,
-  onSnapshot, deleteDoc, where, setDoc,
+  onSnapshot, deleteDoc, where, setDoc, Timestamp,
 } from 'firebase/firestore';
 import { db } from './config';
 
@@ -12,7 +12,13 @@ export const getUser = async (uid) => {
 
 export const getAllUsers = async () => {
   const snap = await getDocs(collection(db, 'users'));
-  return snap.docs.map((d) => d.data());
+  return snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+};
+
+export const updateUserJoinedDate = async (uid, dateValue) => {
+  const parsed = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) throw new Error('Invalid date');
+  await updateDoc(doc(db, 'users', uid), { createdAt: Timestamp.fromDate(parsed) });
 };
 
 // ── Transactions ──────────────────────────────────────────────
@@ -36,6 +42,23 @@ export const getAllTransactions = (uid, callback) => {
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   });
+};
+
+export const getAllTransactionsList = async (uid) => {
+  const snap = await getDocs(
+    query(collection(db, 'users', uid, 'transactions'), orderBy('date', 'desc'))
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const updateTransactionDate = async (uid, txId, dateValue) => {
+  const parsed = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) throw new Error('Invalid date');
+  await updateDoc(doc(db, 'users', uid, 'transactions', txId), { date: Timestamp.fromDate(parsed) });
+};
+
+export const deleteTransaction = async (uid, txId) => {
+  await deleteDoc(doc(db, 'users', uid, 'transactions', txId));
 };
 
 const getTodaySpent = async (uid) => {
