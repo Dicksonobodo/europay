@@ -98,13 +98,54 @@ const AdminPanel = () => {
     setHistoryLoading(false);
   };
 
-  const handleHistoryDateChange = async (tx, value) => {
-    if (!historyUser || !value) return;
+ const handleHistoryDateChange = (tx, value) => {
+  if (!value) return;
+
+  setHistoryDateInputs((prev) => ({
+    ...prev,
+    [tx.id]: value,
+  }));
+};
+
+const handleHistoryDateSave = async (tx) => {
+  if (!historyUser) return;
+
+  const value = historyDateInputs[tx.id];
+  if (!value) return;
+
+  try {
     const parsedValue = new Date(value);
-    setHistoryDateInputs((prev) => ({ ...prev, [tx.id]: value }));
-    setHistoryTxs((prev) => prev.map((item) => item.id === tx.id ? { ...item, date: parsedValue } : item));
-    await updateTransactionDate(historyUser.uid, tx.id, parsedValue);
-  };
+
+    if (Number.isNaN(parsedValue.getTime())) {
+      throw new Error('Invalid date');
+    }
+
+    await updateTransactionDate(
+      historyUser.uid,
+      tx.id,
+      parsedValue
+    );
+
+    setHistoryTxs((prev) =>
+      prev.map((item) =>
+        item.id === tx.id
+          ? { ...item, date: parsedValue }
+          : item
+      )
+    );
+
+    setHistoryDateInputs((prev) => {
+      const updated = { ...prev };
+      delete updated[tx.id];
+      return updated;
+    });
+
+    alert('Transaction date updated successfully.');
+  } catch (error) {
+    console.error('Failed to update transaction date:', error);
+    alert(`Failed to save transaction date: ${error.message}`);
+  }
+};
 
   const handleHistoryDelete = async (tx) => {
     if (!historyUser) return;
