@@ -21,7 +21,7 @@ const Transfer = () => {
   const [error, setError] = useState('');
 
   const quickAmounts = [50, 100, 250, 500];
-  const fmt = (n) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
   const handleSearch = async () => {
     if (!query.trim()) return;

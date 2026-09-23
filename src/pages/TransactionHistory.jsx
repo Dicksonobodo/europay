@@ -19,7 +19,7 @@ const TransactionHistory = () => {
   const [dateDraft, setDateDraft] = useState('');
   const transactionUnsubRef = useRef(null);
 
-  const fmt = (n) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
   const formatDateInputValue = (dateValue) => {
     const d = dateValue?.toDate?.() || new Date(dateValue || Date.now());

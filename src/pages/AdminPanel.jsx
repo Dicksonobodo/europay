@@ -28,7 +28,7 @@ const AdminPanel = () => {
   const [historyDateInputs, setHistoryDateInputs] = useState({});
 
   const fmt = (n) =>
-    new Intl.NumberFormat('de-DE', {
+    new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'EUR',
     }).format(n || 0);

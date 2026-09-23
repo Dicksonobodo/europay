@@ -30,7 +30,7 @@ const AnimatedBalance = ({ value = 0, duration = 1000 }) => {
     return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
   }, [value, duration]);
 
-  const formatted = new Intl.NumberFormat('de-DE', {
+  const formatted = new Intl.NumberFormat('en-US', {
     style: 'currency', currency: 'EUR',
   }).format(display);
 

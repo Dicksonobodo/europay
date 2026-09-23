@@ -26,7 +26,7 @@ const SplitBill = () => {
   const [payModal, setPayModal] = useState(null);
   const [error, setError] = useState('');
 
-  const fmt = (n) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
   useEffect(() => {
     if (!currentUser) return;

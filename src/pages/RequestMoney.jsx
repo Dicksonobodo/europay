@@ -26,7 +26,7 @@ const RequestMoney = () => {
   const [confirmPay, setConfirmPay] = useState(null);
   const [error, setError] = useState('');
 
-  const fmt = (n) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
   const quickAmounts = [10, 25, 50, 100];
 
   useEffect(() => {

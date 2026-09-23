@@ -4,7 +4,7 @@ import { getCategoryInfo } from '../../utils/categories';
 const TransactionItem = ({ tx, onClick }) => {
   const isCredit = tx.type === 'credit';
   const fmt = (n) =>
-    new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0);
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
   const date = tx.date?.toDate?.() || new Date();
   const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });

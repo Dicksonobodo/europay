@@ -18,7 +18,7 @@ const Withdraw = () => {
   const [tierModal, setTierModal] = useState(userData?.tier === 1);
 
   const quickAmounts = [50, 100, 250, 500];
-  const fmt = (n) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
   const handleWithdraw = async () => {
     setLoading(true);
