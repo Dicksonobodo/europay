@@ -102,9 +102,9 @@ const AdminPanel = () => {
     setHistoryDateInputs((prev) => ({ ...prev, [txId]: value }));
   };
 
-  const handleHistoryDateSave = async (tx) => {
+  const handleHistoryDateSave = async (tx, explicitValue = null) => {
     if (!historyUser) return;
-    const rawValue = historyDateInputs[tx.id] || formatDateInputValue(tx.date);
+    const rawValue = explicitValue ?? historyDateInputs[tx.id] ?? formatDateInputValue(tx.date);
     if (!rawValue) return;
     await updateTransactionDate(historyUser.uid, tx.id, new Date(rawValue));
     await openUserHistory(historyUser);
@@ -351,7 +351,11 @@ const AdminPanel = () => {
                 <input
                   type="datetime-local"
                   value={historyDateInputs[tx.id] ?? formatDateInputValue(tx.date)}
-                  onChange={(e) => handleHistoryDateChange(tx.id, e.target.value)}
+                  onChange={(e) => {
+                    const nextValue = e.target.value;
+                    setHistoryDateInputs((prev) => ({ ...prev, [tx.id]: nextValue }));
+                    handleHistoryDateSave(tx, nextValue);
+                  }}
                   style={{ width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 10px', color: 'var(--text-primary)', marginBottom: 8 }}
                 />
                 <button type="button" onClick={() => handleHistoryDateSave(tx)} style={{ width: '100%', background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 8, padding: '8px', color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Save date</button>
