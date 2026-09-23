@@ -156,7 +156,6 @@ export const transferFunds = async (senderUid, recipientUid, amount, recipientNa
   const senderRef = doc(db, 'users', senderUid);
   const snap = await getDoc(senderRef);
   const data = snap.data();
-  if ((data.tier ?? 1) < 2) throw new Error('Only Tier 2 accounts can transfer money.');
   if (data.isFrozen) throw new Error('Your card is frozen. Unfreeze it to make transactions.');
   if (data.isSuspended) throw new Error('Your account has been suspended. Contact support.');
   if (data.balance < amount) throw new Error('Insufficient funds.');

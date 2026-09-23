@@ -19,11 +19,9 @@ const Transfer = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
-  const [tierModal, setTierModal] = useState(userData?.tier === 1);
 
   const quickAmounts = [50, 100, 250, 500];
   const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
-  const isTier2 = (userData?.tier ?? 1) >= 2;
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -52,14 +50,6 @@ const Transfer = () => {
       setConfirm(false);
     }
     setLoading(false);
-  };
-
-  const openTransfer = () => {
-    if (!isTier2) {
-      setTierModal(true);
-      return;
-    }
-    setConfirm(true);
   };
 
   if (success) return (
@@ -192,27 +182,12 @@ const Transfer = () => {
               </div>
             )}
 
-            <Button onClick={() => { setError(''); openTransfer(); }} disabled={!amount || parseFloat(amount) <= 0} fullWidth>
+            <Button onClick={() => { setError(''); setConfirm(true); }} disabled={!amount || parseFloat(amount) <= 0} fullWidth>
               Continue
             </Button>
           </>
         )}
       </div>
-
-      <Modal open={tierModal} title="Upgrade Required">
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{ width: 64, height: 64, background: 'rgba(245,158,11,0.12)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-            <ArrowLeftRight size={28} color="#f59e0b" />
-          </div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>
-            Transfers are only available for <strong style={{ color: '#f59e0b' }}>Tier 2</strong> accounts. Contact support to upgrade.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <Button onClick={() => navigate('/dashboard')} variant="secondary" fullWidth>Back</Button>
-          <Button onClick={() => { setTierModal(false); navigate('/support'); }} fullWidth>Contact Support</Button>
-        </div>
-      </Modal>
 
       {/* Confirm Modal */}
       <Modal open={confirm} onClose={() => setConfirm(false)} title="Confirm Transfer">
