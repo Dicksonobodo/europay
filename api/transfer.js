@@ -1,7 +1,10 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getAdminApp, getAdminFirestore, verifyFirebaseBearerToken } from './_lib/firebaseAdmin.js';
-import { isValidAccountNumber } from '../src/utils/accountNumber.js';
+import {
+  isValidAccountNumber,
+  normalizeAccountNumberSearch,
+} from '../src/utils/accountNumber.js';
 
 const respond = (response, status, body) => response.status(status).json(body);
 
@@ -9,6 +12,38 @@ const reject = (status, message) => {
   const error = new Error(message);
   error.status = status;
   throw error;
+};
+
+const findRecipientByAccountNumber = async (db, accountNumber) => {
+  const directory = await db.collection('transferRecipients').doc(accountNumber).get();
+  if (directory.exists) {
+    const directoryData = directory.data();
+    if (typeof directoryData.uid !== 'string' || !directoryData.uid) return null;
+    const profile = await db.collection('users').doc(directoryData.uid).get();
+    if (!profile.exists
+      || directoryData.accountNumber !== accountNumber
+      || profile.data().accountNumber !== accountNumber
+      || directoryData.fullName !== profile.data().fullName) {
+      return null;
+    }
+    return {
+      uid: profile.id,
+      fullName: profile.data().fullName,
+      accountNumber,
+    };
+  }
+
+  const profiles = await db.collection('users')
+    .where('accountNumber', '==', accountNumber)
+    .limit(2)
+    .get();
+  if (profiles.size !== 1) return null;
+  const profile = profiles.docs[0];
+  return {
+    uid: profile.id,
+    fullName: profile.data().fullName,
+    accountNumber,
+  };
 };
 
 export default async function handler(request, response) {
@@ -35,25 +70,18 @@ export default async function handler(request, response) {
     try {
       const db = getAdminFirestore();
       const recipients = [];
-      const compactSearch = search.replace(/\s/g, '');
+      const compactSearch = normalizeAccountNumberSearch(search);
       if (isValidAccountNumber(compactSearch)) {
-        const recipient = await db.collection('transferRecipients').doc(compactSearch).get();
-        if (recipient.exists && recipient.data().uid !== user.uid) {
-          const { uid, fullName, accountNumber } = recipient.data();
-          recipients.push({ uid, fullName, accountNumber });
-        }
+        const recipient = await findRecipientByAccountNumber(db, compactSearch);
+        if (recipient && recipient.uid !== user.uid) recipients.push(recipient);
       } else if (search.includes('@')) {
         try {
           const account = await getAuth(getAdminApp()).getUserByEmail(search.toLowerCase());
           const profile = await db.collection('users').doc(account.uid).get();
           const accountNumber = profile.data()?.accountNumber;
           if (profile.exists && account.uid !== user.uid && isValidAccountNumber(accountNumber)) {
-            const recipient = await db.collection('transferRecipients').doc(accountNumber).get();
-            if (recipient.exists && recipient.data().uid === account.uid
-              && recipient.data().fullName === profile.data().fullName) {
-              const { uid, fullName } = recipient.data();
-              recipients.push({ uid, fullName, accountNumber });
-            }
+            const recipient = await findRecipientByAccountNumber(db, accountNumber);
+            if (recipient?.uid === account.uid) recipients.push(recipient);
           }
         } catch (error) {
           if (error.code !== 'auth/user-not-found') throw error;
@@ -105,10 +133,22 @@ export default async function handler(request, response) {
         transaction.get(dailyDebitsQuery),
       ]);
       if (!senderSnapshot.exists) reject(404, 'Sender account not found.');
-      if (!directorySnapshot.exists) reject(404, 'No Europay account matches that account number.');
 
       const sender = senderSnapshot.data();
-      const recipientUid = directorySnapshot.data().uid;
+      let recipientUid;
+      if (directorySnapshot.exists) {
+        recipientUid = directorySnapshot.data().uid;
+        if (typeof recipientUid !== 'string' || !recipientUid) {
+          reject(409, 'Recipient account details could not be verified.');
+        }
+      } else {
+        const matchingProfiles = await transaction.get(
+          db.collection('users').where('accountNumber', '==', accountNumber).limit(2)
+        );
+        if (matchingProfiles.empty) reject(404, 'No Europay account matches that account number.');
+        if (matchingProfiles.size !== 1) reject(409, 'Recipient account number is ambiguous.');
+        recipientUid = matchingProfiles.docs[0].id;
+      }
       if (recipientUid === user.uid) reject(400, 'You cannot transfer money to your own account.');
       const recipientRef = db.collection('users').doc(recipientUid);
       const recipientSnapshot = await transaction.get(recipientRef);
@@ -140,7 +180,9 @@ export default async function handler(request, response) {
 
       const recipient = recipientSnapshot.data();
       if (recipient.accountNumber !== accountNumber
-        || directorySnapshot.data().fullName !== recipient.fullName) {
+        || (directorySnapshot.exists
+          && (directorySnapshot.data().accountNumber !== accountNumber
+            || directorySnapshot.data().fullName !== recipient.fullName))) {
         reject(409, 'Recipient account details could not be verified.');
       }
       const recipientTransactionRef = recipientRef.collection('transactions').doc();

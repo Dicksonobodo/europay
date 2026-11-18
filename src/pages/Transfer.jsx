@@ -61,6 +61,7 @@ const Transfer = () => {
     if (!query.trim()) return;
     setSearching(true);
     setError('');
+    setResults([]);
     try {
       const all = await getTransferRecipients(query);
       const filtered = all.filter((recipient) =>
@@ -201,17 +202,28 @@ const Transfer = () => {
                 placeholder="Name, email, or account number"
                 aria-label="Search recipient by name, email, or account number"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setResults([]);
+                  setError('');
+                }}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               />
-              <button onClick={handleSearch} style={{
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={searching || !query.trim()}
+                aria-label="Search recipients"
+                style={{
                 background: 'linear-gradient(135deg, #7c3aed, #5b21b6)',
                 border: 'none', borderRadius: 14, padding: '14px 16px', cursor: 'pointer',
+                opacity: searching || !query.trim() ? 0.6 : 1,
               }}>
                 <Search size={18} color="#fff" />
               </button>
             </div>
             {searching && <p role="status" style={{ color: 'var(--text-secondary)', fontSize: 14, textAlign: 'center', padding: 16 }}>Searching…</p>}
+            {error && <p role="alert" style={{ color: '#ef4444', fontSize: 13, marginBottom: 12 }}>{error}</p>}
             {results.map((u) => (
               <button key={u.uid} onClick={() => setSelected(u)} style={{
                 width: '100%', background: 'var(--bg-card)',

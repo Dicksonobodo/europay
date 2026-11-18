@@ -1,5 +1,8 @@
 export const isValidAccountNumber = (value) => /^\d{12}$/.test(String(value || ''));
 
+export const normalizeAccountNumberSearch = (value) =>
+  String(value || '').replace(/[\s-]/g, '');
+
 export const generateAccountNumber = () => {
   const digits = new Uint8Array(12);
   globalThis.crypto.getRandomValues(digits);

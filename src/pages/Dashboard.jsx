@@ -127,7 +127,7 @@ const Dashboard = () => {
 
         {userData?.tier === 1 && (
           <div style={{ marginTop: 12, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 12, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, color: '#f59e0b' }}>Tier 1 — Upgrade for withdrawals</span>
+            <span style={{ fontSize: 13, color: '#f59e0b' }}>Tier 1 — contact support to upgrade account</span>
             <button onClick={() => navigate('/profile')} style={{ background: 'rgba(245,158,11,0.2)', border: 'none', borderRadius: 8, padding: '4px 10px', color: '#f59e0b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Upgrade</button>
           </div>
         )}
