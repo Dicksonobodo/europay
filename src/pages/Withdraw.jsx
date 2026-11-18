@@ -493,13 +493,7 @@ const Withdraw = () => {
             <span style={{ color: 'var(--text-secondary)' }}>App withdrawal fee</span>
             <strong>€0.00</strong>
           </div>
-          <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            No fee is collected by this app. Any requirement shown above is informational and does not guarantee a payout.
-          </p>
-          <div style={{ display: 'flex', gap: 7, alignItems: 'flex-start', marginTop: 10, fontSize: 11, color: 'var(--text-secondary)' }}>
-            <Clock3 size={14} style={{ flexShrink: 0 }} />
-            Estimated arrival: unavailable — this request is simulated/manual and no payout provider is connected.
-          </div>
+          
         </section>
 
         <Button
