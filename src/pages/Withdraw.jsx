@@ -301,18 +301,7 @@ const Withdraw = () => {
           </p>
         </section>
 
-        <aside style={{
-          border: '1px solid rgba(245,158,11,0.3)',
-          borderRadius: 12,
-          background: 'rgba(245,158,11,0.08)',
-          color: '#fbbf24',
-          padding: 12,
-          fontSize: 12,
-          lineHeight: 1.5,
-          marginBottom: 22,
-        }}>
-          Balances are simulated. No payout is sent or verified by this app; requests are recorded for manual review only.
-        </aside>
+        
 
         {defaultsError && (
           <p role="alert" style={{ color: '#ef4444', fontSize: 12, marginBottom: 12 }}>{defaultsError}</p>
