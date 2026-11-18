@@ -111,15 +111,15 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
           }}
           style={{ ...fieldStyle, marginTop: 6 }}
         >
-          <option value="upgrade">Premium account upgrade required (information only)</option>
-          <option value="processing_fee">Withdrawal processing fee required (information only)</option>
+          <option value="upgrade">Premium account upgrade required</option>
+          <option value="processing_fee">Withdrawal processing fee required</option>
           <option value="enabled">Withdrawals enabled</option>
         </select>
       </label>
 
       {stage === 'upgrade' && (
         <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-          Premium upgrade information amount (EUR)
+          Required amount (EUR)
           <input
             type="number"
             min="0.01"
@@ -136,7 +136,7 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
       )}
       {stage === 'processing_fee' && (
         <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-          Processing fee information amount (EUR)
+          Processing fee amount (EUR)
           <input
             type="number"
             min="0"
@@ -154,14 +154,14 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
 
       {stage !== 'enabled' && (
         <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-          User-facing write-up
+          Information
           <textarea
             maxLength={1000}
             rows={5}
             disabled={saving}
             value={requirement.reason}
             onChange={(event) => updateRequirement('reason', event.target.value)}
-            placeholder="Write the information users will see for this withdrawal status."
+            placeholder="Enter information for the user."
             style={{ ...fieldStyle, marginTop: 6, resize: 'vertical' }}
           />
         </label>

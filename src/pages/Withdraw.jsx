@@ -372,9 +372,6 @@ const Withdraw = () => {
             {withdrawalRequirement.reason && (
               <p style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{withdrawalRequirement.reason}</p>
             )}
-            <p style={{ marginTop: 6 }}>
-              Withdrawal requests are simulated/manual; this app does not send or verify payouts.
-            </p>
           </section>
         )}
 
@@ -629,9 +626,6 @@ const Withdraw = () => {
           {withdrawalRequirement.reason && (
             <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{withdrawalRequirement.reason}</p>
           )}
-          <p style={{ fontSize: 12, lineHeight: 1.5, color: '#fdba74' }}>
-            Withdrawal requests are simulated/manual. This app does not send or verify payouts.
-          </p>
           <p
             role={requirementEmailStatus.status === 'failed' ? 'alert' : 'status'}
             aria-live="polite"
