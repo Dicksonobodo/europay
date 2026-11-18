@@ -249,8 +249,8 @@ const BankTransferDetails = ({
                     </p>
                   )}
                   {error && (
-                    <p role="status" style={{ padding: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
-                      Bank search is unavailable right now. You can enter your bank details manually below.
+                    <p role="alert" style={{ padding: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {error} You can enter your bank details manually below.
                     </p>
                   )}
                   {results.length > 0 && (
