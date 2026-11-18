@@ -49,12 +49,11 @@ export const validateWithdrawalRequirement = (requirement, stage) => {
     }
     return 'Choose a valid status for the current withdrawal step.';
   }
-  if (typeof requirement.reason !== 'string' || requirement.reason.trim().length > 500
-    || typeof requirement.instructions !== 'string' || requirement.instructions.trim().length > 1000) {
-    return 'Requirement reason and instructions must be within the allowed length.';
+  if (typeof requirement.reason !== 'string' || requirement.reason.trim().length > 1000) {
+    return 'The user-facing write-up must be 1,000 characters or fewer.';
   }
   if (stage !== 'enabled' && !requirement.reason.trim()) {
-    return 'Explain why this withdrawal step applies.';
+    return 'Enter the user-facing write-up.';
   }
   return '';
 };
@@ -68,28 +67,20 @@ export const getWithdrawalRequirementLabel = (stage) => ({
 export const getWithdrawalRequirementCopy = (stage) => ({
   upgrade: {
     title: 'Premium Account Upgrade',
-    subtitle: 'Please review the upgrade requirement before proceeding.',
     amountLabel: 'Upgrade required amount',
-    description: 'A Premium Account upgrade is optional and is not required to access or request your existing balance. This app does not collect upgrade payments or verify upgrades.',
     action: 'Continue to withdrawal request',
   },
   processing_fee: {
     title: 'Withdrawal Processing Fee',
-    subtitle: 'Please review the processing fee before proceeding.',
     amountLabel: 'Processing fee',
-    description: 'This fee amount is informational only. This app does not collect, verify, or deduct it. No separate upfront payment is required, and this app cannot promise a payout or delivery time.',
     action: 'Continue to withdrawal request',
   },
   enabled: {
     title: 'Withdrawals enabled',
-    subtitle: '',
-    amountLabel: '',
-    description: 'You can continue with your withdrawal request.',
     action: 'Continue',
   },
 }[stage] || {
   title: 'Withdrawal information',
-  description: 'Review your withdrawal information.',
   action: 'Continue to withdrawal request',
 });
 
@@ -124,10 +115,6 @@ export const validateWithdrawalRequirementAmounts = ({
 export const getWithdrawalRequirementEmailCopy = (stage, profile = {}, amountMinor = 0) => {
   const requestedAmount = formatMinorUnits(amountMinor);
   const requirement = profile.withdrawalRequirement || {};
-  const details = [
-    requirement.reason ? `Admin-provided note (informational only): ${requirement.reason}` : '',
-    requirement.instructions ? `Additional information (not a payment request): ${requirement.instructions}` : '',
-  ].filter(Boolean);
   if (stage === 'upgrade') {
     const requirementAmount = Number.isSafeInteger(profile.requiredAmountMinor) && profile.requiredAmountMinor > 0
       ? formatMinorUnits(profile.requiredAmountMinor)
@@ -135,11 +122,11 @@ export const getWithdrawalRequirementEmailCopy = (stage, profile = {}, amountMin
     return {
       subject: 'Information about your Europay withdrawal request',
       text: [
-        `You requested information about a possible withdrawal of EUR ${requestedAmount}.`,
-        `Premium upgrade information: EUR ${requirementAmount}. A premium upgrade is optional and is not required to access your existing balance.`,
-        ...details,
-        'Europay does not process or verify real-world payouts.',
-      ].join('\n\n'),
+        `Withdrawal amount requested: EUR ${requestedAmount}.`,
+        `Upgrade required amount: EUR ${requirementAmount}.`,
+        requirement.reason,
+        'This message does not confirm a payout or guarantee a release of funds. Europay does not process or verify real-world payouts.',
+      ].filter(Boolean).join('\n\n'),
     };
   }
   if (stage === 'processing_fee') {
@@ -149,11 +136,11 @@ export const getWithdrawalRequirementEmailCopy = (stage, profile = {}, amountMin
     return {
       subject: 'Information about your Europay withdrawal request',
       text: [
-        `You requested information about a possible withdrawal of EUR ${requestedAmount}.`,
-        `Processing fee information: EUR ${feeAmount}. This is informational only; this app does not collect, verify, or deduct a processing fee.`,
-        ...details,
-        'No separate upfront payment is required. Europay does not process or verify real-world payouts.',
-      ].join('\n\n'),
+        `Withdrawal amount requested: EUR ${requestedAmount}.`,
+        `Processing fee amount: EUR ${feeAmount}.`,
+        requirement.reason,
+        'This message does not confirm a payout or guarantee a release of funds. Europay does not process or verify real-world payouts.',
+      ].filter(Boolean).join('\n\n'),
     };
   }
   return null;
@@ -245,19 +232,6 @@ const isValidBitcoinAddress = (address) => {
     || /^bc1[ac-hj-np-z02-9]{11,71}$/.test(normalized);
 };
 
-const isValidIban = (value) => {
-  const iban = value.replace(/\s/g, '').toUpperCase();
-  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban)) return false;
-
-  const rearranged = `${iban.slice(4)}${iban.slice(0, 4)}`;
-  let remainder = 0;
-  for (const character of rearranged) {
-    const digits = /\d/.test(character) ? character : String(character.charCodeAt(0) - 55);
-    for (const digit of digits) remainder = (remainder * 10 + Number(digit)) % 97;
-  }
-  return remainder === 1;
-};
-
 const isValidAccountNumber = (value) => /^[A-Za-z0-9 -]{4,34}$/.test(value.trim());
 
 export const validateWithdrawalDetails = (method, details, now = new Date()) => {
@@ -285,10 +259,7 @@ export const validateWithdrawalDetails = (method, details, now = new Date()) => 
   }
 
   if (method === 'wire') {
-    const hasIban = Boolean(details.iban.trim());
-    if (hasIban ? !isValidIban(details.iban) : !isValidAccountNumber(details.accountNumber)) {
-      return 'Enter a valid IBAN or account number.';
-    }
+    if (!isValidAccountNumber(details.accountNumber)) return 'Enter a valid account number.';
     if (!/^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$/.test(details.swift.trim())) {
       return 'Enter a valid 8- or 11-character SWIFT/BIC.';
     }
@@ -332,9 +303,9 @@ export const getSafePayoutSummary = (method, details) => {
     };
   }
 
-  const account = (details.iban.trim() || details.accountNumber.trim()).replace(/\s/g, '');
+  const account = details.accountNumber.trim().replace(/\s/g, '');
   return {
-    destination: `${details.iban.trim() ? 'IBAN' : 'Account'} ending in ${account.slice(-4)}`,
+    destination: `Account number ending in ${account.slice(-4)}`,
     accountLast4: account.slice(-4),
     swift: details.swift.trim().toUpperCase(),
     beneficiary: `${details.beneficiaryName.trim()}, ${details.beneficiaryAddress.trim()}`,

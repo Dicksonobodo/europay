@@ -387,7 +387,7 @@ export const setWithdrawalSettings = async (uid, settings) => {
     withdrawalRequirement: {
       status: requirement.status,
       reason: requirement.reason.trim(),
-      instructions: requirement.instructions.trim(),
+      instructions: '',
     },
     withdrawalSettingsUpdatedAt: serverTimestamp(),
   };
@@ -404,7 +404,7 @@ export const setWithdrawalSettings = async (uid, settings) => {
     withdrawalRequirement: {
       status: requirement.status,
       reason: requirement.reason.trim(),
-      instructions: requirement.instructions.trim(),
+      instructions: '',
     },
     ...(stage === 'enabled' ? { isPro: true, tier: 2 } : {}),
   };
@@ -468,7 +468,7 @@ export const getUserByAccountNumber = async (q) => {
   const snap = await getDocs(collection(db, 'users'));
   const users = snap.docs.map((d) => d.data());
   const q2 = q.trim().toUpperCase();
-  return users.find((u) => u.iban?.toUpperCase() === q2 || String(u.cardNumber) === q2) || null;
+  return users.find((u) => u.accountNumber?.toUpperCase() === q2) || null;
 };
 
 // ── Login Activity ────────────────────────────────────────────

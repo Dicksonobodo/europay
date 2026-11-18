@@ -33,7 +33,6 @@ service cloud.firestore {
           'withdrawalStage',
           'role',
           'cardNumber',
-          'iban',
           'accountNumber',
           'emailVerified',
           'isFrozen',

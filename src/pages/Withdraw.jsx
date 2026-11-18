@@ -14,7 +14,6 @@ import { useCurrency } from '../hooks/useCurrency';
 import {
   DEFAULT_MINIMUM_WITHDRAWAL_MINOR,
   formatMinorUnits,
-  getWithdrawalRequirementLabel,
   getWithdrawalRequirementCopy,
   getRequirementEmailStatusMessage,
   getWithdrawalRequirementAmounts,
@@ -46,7 +45,7 @@ const INITIAL_DETAILS = {
     selectedBank: null,
     manualEntry: false,
   },
-  wire: { iban: '', accountNumber: '', swift: '', beneficiaryName: '', beneficiaryAddress: '' },
+  wire: { accountNumber: '', swift: '', beneficiaryName: '', beneficiaryAddress: '' },
 };
 
 const Withdraw = () => {
@@ -350,26 +349,12 @@ const Withdraw = () => {
             Account frozen. Withdrawals are unavailable until support resolves the freeze.
           </p>
         )}
-        {stage === 'upgrade' && !userData?.isFrozen && (
-          <p style={{
-            background: 'rgba(124,58,237,0.1)',
-            border: '1px solid rgba(124,58,237,0.25)',
-            borderRadius: 12,
-            padding: 12,
-            color: 'var(--text-secondary)',
-            fontSize: 13,
-            lineHeight: 1.5,
-            marginBottom: 16,
-          }}>
-            Premium upgrade information: {upgradeAmountLabel}. An upgrade is optional and is not required to access your existing balance.
-          </p>
-        )}
         {stage !== 'enabled' && (
           <section
-            aria-label="Withdrawal requirement status"
+            aria-label="Withdrawal requirement information"
             style={{
-              background: 'rgba(245,158,11,0.08)',
-              border: '1px solid rgba(245,158,11,0.25)',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
               borderRadius: 12,
               padding: 12,
               marginBottom: 16,
@@ -379,21 +364,16 @@ const Withdraw = () => {
             }}
           >
             <p style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-              {getWithdrawalRequirementLabel(stage)} — information only
+              {getWithdrawalRequirementCopy(stage).amountLabel}:{' '}
+              {stage === 'upgrade'
+                ? upgradeAmountLabel
+                : formatRequirementAmount(requirementAmounts.processingFeeMinor)}
             </p>
             {withdrawalRequirement.reason && (
-              <p style={{ marginTop: 6 }}>Admin note (informational only): {withdrawalRequirement.reason}</p>
-            )}
-            {withdrawalRequirement.instructions && (
-              <p style={{ marginTop: 6 }}>Additional information: {withdrawalRequirement.instructions}</p>
-            )}
-            {stage === 'processing_fee' && (
-              <p style={{ marginTop: 6, color: '#fbbf24' }}>
-                Fee information: {formatRequirementAmount(requirementAmounts.processingFeeMinor)}. This app does not collect, verify, or deduct fees. No separate upfront payment is required.
-              </p>
+              <p style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{withdrawalRequirement.reason}</p>
             )}
             <p style={{ marginTop: 6 }}>
-              This status does not prevent you from requesting a withdrawal. Requests remain simulated/manual and are not verified payouts.
+              Withdrawal requests are simulated/manual; this app does not send or verify payouts.
             </p>
           </section>
         )}
@@ -522,8 +502,7 @@ const Withdraw = () => {
           )}
           {method === 'wire' && (
             <>
-              {detailInput('iban', 'IBAN (if available)', { maxLength: 34 })}
-              {detailInput('accountNumber', 'Account number (if no IBAN)', { maxLength: 34 })}
+              {detailInput('accountNumber', 'Account number', { maxLength: 34 })}
               {detailInput('swift', 'SWIFT/BIC', { maxLength: 11 })}
               {detailInput('beneficiaryName', 'Beneficiary name')}
               {detailInput('beneficiaryAddress', 'Beneficiary address', { maxLength: 200 })}
@@ -632,42 +611,26 @@ const Withdraw = () => {
         }}
       >
         <div style={{ display: 'grid', gap: 12, fontSize: 14, color: '#cbd5e1' }}>
-          <p style={{ fontSize: 13, color: '#94a3b8' }}>
-            {getWithdrawalRequirementCopy(stage).subtitle}
-          </p>
           <p>
             Requested withdrawal amount: <strong style={{ color: '#f8fafc' }}>{formatRequirementAmount(parsedAmountMinor || 0)}</strong>
           </p>
           {stage === 'upgrade' && (
-            <p style={{ lineHeight: 1.55 }}>
-              {getWithdrawalRequirementCopy(stage).description}
-            </p>
-          )}
-          {stage === 'processing_fee' && (
-            <p style={{ lineHeight: 1.55 }}>{getWithdrawalRequirementCopy(stage).description}</p>
-          )}
-          {stage === 'upgrade' && (
             <p>
               {getWithdrawalRequirementCopy(stage).amountLabel}:{' '}
               <strong style={{ color: '#f8fafc' }}>{upgradeAmountLabel}</strong>
-              <span> (optional information; no payment is required to request access to your existing balance)</span>
             </p>
           )}
           {stage === 'processing_fee' && (
             <p>
               {getWithdrawalRequirementCopy(stage).amountLabel}:{' '}
               <strong style={{ color: '#f8fafc' }}>{formatRequirementAmount(requirementAmounts.processingFeeMinor)}</strong>
-              <span> (informational only; no separate payment is collected or deducted)</span>
             </p>
           )}
           {withdrawalRequirement.reason && (
-            <p>Admin note (informational only): {withdrawalRequirement.reason}</p>
-          )}
-          {withdrawalRequirement.instructions && (
-            <p>Additional information (not a payment request): {withdrawalRequirement.instructions}</p>
+            <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{withdrawalRequirement.reason}</p>
           )}
           <p style={{ fontSize: 12, lineHeight: 1.5, color: '#fdba74' }}>
-            This information does not prevent access to existing funds. No separate fee payment is requested or collected. Withdrawal requests are simulated/manual; this app does not send or verify payouts.
+            Withdrawal requests are simulated/manual. This app does not send or verify payouts.
           </p>
           <p
             role={requirementEmailStatus.status === 'failed' ? 'alert' : 'status'}

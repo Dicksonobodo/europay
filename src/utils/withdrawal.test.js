@@ -54,6 +54,26 @@ test('card withdrawal validation checks number, cardholder and unexpired expiry'
   assert.equal(validateWithdrawalDetails('card', { ...valid, expiry: '02/26' }, now), 'Enter a valid, unexpired MM/YY expiry.');
 });
 
+test('wire withdrawal uses account-number details', () => {
+  const details = {
+    accountNumber: '123456789012',
+    swift: 'DEUTDEFF',
+    beneficiaryName: 'Ada Lovelace',
+    beneficiaryAddress: '1 Example Street, Berlin',
+  };
+  assert.equal(validateWithdrawalDetails('wire', details), '');
+  assert.equal(
+    validateWithdrawalDetails('wire', { ...details, accountNumber: '123' }),
+    'Enter a valid account number.'
+  );
+  assert.deepEqual(getSafePayoutSummary('wire', details), {
+    destination: 'Account number ending in 9012',
+    accountLast4: '9012',
+    swift: 'DEUTDEFF',
+    beneficiary: 'Ada Lovelace, 1 Example Street, Berlin',
+  });
+});
+
 test('payout summary retains only the card details needed by the withdrawal flow', () => {
   const summary = getSafePayoutSummary('card', {
     cardNumber: '4111111111111111',
@@ -85,16 +105,14 @@ test('withdrawal requirement statuses show information before requests and enabl
   assert.equal(getWithdrawalRequirementLabel('processing_fee'), 'Processing fee information');
   assert.equal(getWithdrawalRequirementLabel('enabled'), 'Withdrawals enabled');
   assert.equal(getWithdrawalRequirementCopy('upgrade').title, 'Premium Account Upgrade');
-  assert.equal(getWithdrawalRequirementCopy('upgrade').subtitle, 'Please review the upgrade requirement before proceeding.');
   assert.equal(getWithdrawalRequirementCopy('processing_fee').title, 'Withdrawal Processing Fee');
-  assert.equal(getWithdrawalRequirementCopy('processing_fee').subtitle, 'Please review the processing fee before proceeding.');
   assert.equal(getWithdrawalRequirementCopy('upgrade').amountLabel, 'Upgrade required amount');
   assert.equal(getWithdrawalRequirementCopy('processing_fee').amountLabel, 'Processing fee');
-  assert.equal(getWithdrawalRequirementCopy('enabled').subtitle, '');
+  assert.equal(Object.hasOwn(getWithdrawalRequirementCopy('upgrade'), 'description'), false);
   assert.equal(getWithdrawalRequirementEmailCopy('enabled', {}, 5000), null);
 });
 
-test('renders distinct upgrade and processing-fee descriptions and EUR amounts', () => {
+test('uses the admin write-up and configured amount in requirement emails', () => {
   const profile = {
     requiredAmountMinor: 12500,
     processingFeeMinor: 2500,
@@ -108,23 +126,20 @@ test('renders distinct upgrade and processing-fee descriptions and EUR amounts',
     processingFeeMinor: 0,
     currency: 'EUR',
   });
-  assert.match(getWithdrawalRequirementCopy('upgrade').description, /optional/);
-  assert.match(getWithdrawalRequirementCopy('processing_fee').description, /does not collect, verify, or deduct it/);
   assert.equal(formatMinorUnits(12500), '125.00');
   const upgradeEmail = getWithdrawalRequirementEmailCopy('upgrade', profile, 5000).text;
   const feeEmail = getWithdrawalRequirementEmailCopy('processing_fee', profile, 5000).text;
   assert.match(upgradeEmail, /EUR 125\.00/);
-  assert.match(upgradeEmail, /possible withdrawal of EUR 50\.00/);
-  assert.doesNotMatch(upgradeEmail, /request .* recorded/i);
-  assert.match(upgradeEmail, /optional/);
+  assert.match(upgradeEmail, /Withdrawal amount requested: EUR 50\.00/);
+  assert.match(upgradeEmail, /Account information review\./);
   assert.doesNotMatch(upgradeEmail, /immediately upon payment confirmation/);
-  assert.match(upgradeEmail, /Admin-provided note \(informational only\): Account information review/);
   assert.doesNotMatch(upgradeEmail, /Processing fee information/);
   assert.match(feeEmail, /EUR 25\.00/);
-  assert.match(feeEmail, /possible withdrawal of EUR 50\.00/);
-  assert.match(feeEmail, /does not collect, verify, or deduct/);
+  assert.match(feeEmail, /Withdrawal amount requested: EUR 50\.00/);
+  assert.match(feeEmail, /Account information review\./);
   assert.doesNotMatch(feeEmail, /24.?48 hours/);
-  assert.match(feeEmail, /not a payment request\): Contact support for details/);
+  assert.doesNotMatch(feeEmail, /Contact support for details/);
+  assert.match(feeEmail, /does not confirm a payout or guarantee a release of funds/);
   assert.doesNotMatch(feeEmail, /Premium upgrade information/);
 });
 
@@ -167,7 +182,7 @@ test('withdrawal requirement validation requires a reason and valid status', () 
     status: 'in_progress',
     reason: '',
     instructions: '',
-  }, 'processing_fee'), /Explain why/);
+  }, 'processing_fee'), /user-facing write-up/);
   assert.equal(validateWithdrawalRequirement({
     status: 'completed',
     reason: '',

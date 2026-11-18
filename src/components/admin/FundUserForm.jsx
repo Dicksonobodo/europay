@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { getAllUsers, fundUserAccount, upgradeToTier2, downgradeToTier1 } from '../../firebase/firestore';
 import Button from '../ui/Button';
 import { Search, TrendingUp, TrendingDown } from 'lucide-react';
+import { formatAccountNumber } from '../../utils/accountNumber';
 
 const FundUserForm = () => {
   const [search, setSearch] = useState('');
@@ -24,10 +25,10 @@ const FundUserForm = () => {
       const user = users.find(
         (u) =>
           u.email?.toLowerCase() === q ||
-          u.iban?.toLowerCase() === q ||
+            u.accountNumber?.toLowerCase() === q.replace(/\s/g, '') ||
           String(u.cardNumber) === q
       );
-      if (!user) throw new Error('No user found with that email, IBAN, or card number');
+      if (!user) throw new Error('No user found with that email, account number, or card number');
       setFoundUser(user);
     } catch (e) {
       setMsg({ type: 'error', text: e.message });
@@ -82,14 +83,14 @@ const FundUserForm = () => {
   return (
     <div>
       <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
-        Search by email, IBAN, or card number to manage a user account.
+        Search by email, Europay account number, or card number to manage a user account.
       </p>
 
       {/* Search */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
         <input
           style={{ ...inputStyle, flex: 1 }}
-          placeholder="Email, IBAN, or card number…"
+          placeholder="Email, account number, or card number…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -136,13 +137,11 @@ const FundUserForm = () => {
             </div>
           </div>
 
-          {/* IBAN display */}
+          {/* Account number display */}
           <div style={{ background: 'var(--bg-card)', borderRadius: 10, padding: '10px 12px', marginBottom: 14 }}>
-            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>IBAN</p>
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>Europay account number</p>
             <p style={{ fontSize: 12, fontWeight: 600, color: '#a78bfa', letterSpacing: 1 }}>
-              {foundUser.iban
-                ? foundUser.iban.replace(/(.{4})/g, '$1 ').trim()
-                : 'Not assigned'}
+              {formatAccountNumber(foundUser.accountNumber) || 'Not assigned'}
             </p>
           </div>
 

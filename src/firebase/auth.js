@@ -9,15 +9,6 @@ import { doc, runTransaction, serverTimestamp, addDoc, collection } from 'fireba
 import { getStoredCurrency } from '../utils/currency';
 import { generateAccountNumber } from '../utils/accountNumber';
 
-const generateIBAN = () => {
-  const checkDigits = String(Math.floor(10 + Math.random() * 90));
-  const cin = String.fromCharCode(65 + Math.floor(Math.random() * 26));
-  const abi = String(Math.floor(10000 + Math.random() * 90000));
-  const cab = String(Math.floor(10000 + Math.random() * 90000));
-  const account = String(Math.floor(100000000000 + Math.random() * 900000000000));
-  return `IT${checkDigits}${cin}${abi}${cab}${account}`;
-};
-
 export const registerUser = async (email, password, fullName) => {
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const user = userCredential.user;
@@ -25,7 +16,6 @@ export const registerUser = async (email, password, fullName) => {
   await sendEmailVerification(user);
 
   const cardNumber = Math.floor(1000 + Math.random() * 9000);
-  const iban = generateIBAN();
 
   const profile = {
     uid: user.uid,
@@ -38,7 +28,6 @@ export const registerUser = async (email, password, fullName) => {
     withdrawalStage: 'upgrade',
     role: 'user',
     cardNumber,
-    iban,
     emailVerified: false,
     isFrozen: false,
     isSuspended: false,
