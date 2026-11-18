@@ -1,6 +1,8 @@
 import AnimatedBalance from './AnimatedBalance';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const BankCard = ({ balance, cardNumber, fullName, isFrozen }) => {
+  const { currency } = useCurrency();
   return (
     <div style={{
       background: isFrozen
@@ -35,7 +37,7 @@ const BankCard = ({ balance, cardNumber, fullName, isFrozen }) => {
         }}>
           {isFrozen
             ? <span style={{ fontSize: 11, color: '#93c5fd', fontWeight: 700 }}>🔒 FROZEN</span>
-            : <span style={{ fontSize: 11, color: '#a78bfa', fontWeight: 700 }}>€ EUR</span>
+            : <span style={{ fontSize: 11, color: '#a78bfa', fontWeight: 700 }}>{currency} display</span>
           }
         </div>
       </div>

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { loginUser } from '../firebase/auth';
 import Button from '../components/ui/Button';
+import CurrencySelector from '../components/ui/CurrencySelector';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -43,6 +44,7 @@ const Login = () => {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <CurrencySelector />
         <div>
           <label style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: 0.5, display: 'block', marginBottom: 8 }}>EMAIL</label>
           <input style={inputStyle} placeholder="you@example.com" type="email" value={form.email}

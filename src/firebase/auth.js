@@ -6,6 +6,7 @@ import {
 } from 'firebase/auth';
 import { auth, db } from './config';
 import { doc, setDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
+import { getStoredCurrency } from '../utils/currency';
 
 const generateIBAN = () => {
   const checkDigits = String(Math.floor(10 + Math.random() * 90));
@@ -29,8 +30,11 @@ export const registerUser = async (email, password, fullName) => {
     uid: user.uid,
     fullName,
     email,
+    preferredCurrency: getStoredCurrency(),
     balance: 0,
     tier: 1,
+    isPro: false,
+    withdrawalStage: 'upgrade',
     role: 'user',
     cardNumber,
     iban,

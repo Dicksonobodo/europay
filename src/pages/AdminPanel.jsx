@@ -1,9 +1,11 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, DollarSign, BarChart2, Shield } from 'lucide-react';
+import { ArrowLeft, Users, DollarSign, BarChart2, Shield, Settings } from 'lucide-react';
 import FundUserForm from '../components/admin/FundUserForm';
 import AuditLog from '../components/admin/AuditLog';
+import WithdrawalSettingsForm from '../components/admin/WithdrawalSettingsForm';
+import AppDefaultsEditor from '../components/admin/AppDefaultsEditor';
 import Modal from '../components/ui/Modal';
 import {
   getAllUsers, upgradeToTier2, downgradeToTier1,
@@ -18,14 +20,19 @@ const AdminPanel = () => {
   const [tab, setTab] = useState('stats');
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [usersError, setUsersError] = useState('');
   const [limitInputs, setLimitInputs] = useState({});
   const [stats, setStats] = useState(null);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState('');
+  const [statsRetry, setStatsRetry] = useState(0);
   const [showAudit, setShowAudit] = useState(false);
   const [historyUser, setHistoryUser] = useState(null);
   const [historyTxs, setHistoryTxs] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyDateInputs, setHistoryDateInputs] = useState({});
+  const [userSearch, setUserSearch] = useState('');
+  const [expandedUsers, setExpandedUsers] = useState({});
 
   const fmt = (n) =>
     new Intl.NumberFormat('en-US', {
@@ -47,21 +54,39 @@ const AdminPanel = () => {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const s = await getAdminStats();
-      setStats(s);
-      setLoadingStats(false);
+      setLoadingStats(true);
+      setStatsError('');
+      try {
+        const result = await getAdminStats();
+        setStats(result);
+      } catch (error) {
+        setStatsError(error.message || 'Could not load admin statistics.');
+      } finally {
+        setLoadingStats(false);
+      }
     };
 
     fetchStats();
-  }, []);
+  }, [statsRetry]);
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
+    setUsersError('');
+    try {
+      const all = await getAllUsers();
+      setUsers(all);
+      setExpandedUsers(Object.fromEntries(all.map((user) => [user.uid, true])));
+    } catch (error) {
+      setUsersError(error.message || 'Could not load users. Verify your admin access and Firestore rules.');
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
 
-    const all = await getAllUsers();
-
-    setUsers(all);
-    setLoadingUsers(false);
+  const handleWithdrawalSettingsSaved = (uid, settings) => {
+    setUsers((previous) => previous.map((user) => (
+      user.uid === uid ? { ...user, ...settings } : user
+    )));
   };
 
   const handleTabChange = (t) => {
@@ -300,7 +325,20 @@ const AdminPanel = () => {
       label: 'Users',
       icon: Users,
     },
+    {
+      key: 'settings',
+      label: 'Settings',
+      icon: Settings,
+    },
   ];
+
+  const visibleUsers = users.filter((user) => {
+    const search = userSearch.trim().toLowerCase();
+    return !search
+      || user.fullName?.toLowerCase().includes(search)
+      || user.email?.toLowerCase().includes(search)
+      || user.uid?.toLowerCase().includes(search);
+  });
 
   return (
     <div
@@ -460,6 +498,40 @@ const AdminPanel = () => {
             >
               Loading stats…
             </p>
+          ) : statsError ? (
+            <div
+              role="alert"
+              style={{
+                color: '#ef4444',
+                background: 'rgba(239,68,68,0.08)',
+                border: '1px solid rgba(239,68,68,0.25)',
+                borderRadius: 12,
+                padding: 14,
+                fontSize: 13,
+                lineHeight: 1.5,
+              }}
+            >
+              <p>Could not load admin statistics: {statsError}</p>
+              <p style={{ marginTop: 6 }}>
+                Confirm that your account profile has the admin role and that the latest Firestore rules are deployed to this Firebase project.
+              </p>
+              <button
+                type="button"
+                onClick={() => setStatsRetry((attempt) => attempt + 1)}
+                style={{
+                  marginTop: 12,
+                  padding: '8px 12px',
+                  border: '1px solid rgba(124,58,237,0.3)',
+                  borderRadius: 9,
+                  background: 'rgba(124,58,237,0.15)',
+                  color: '#a78bfa',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Retry
+              </button>
+            </div>
           ) : (
             <>
               <div
@@ -689,6 +761,8 @@ const AdminPanel = () => {
           <FundUserForm />
         )}
 
+        {tab === 'settings' && <AppDefaultsEditor />}
+
         {/* Users Tab */}
         {tab === 'users' && (
           <div>
@@ -704,7 +778,53 @@ const AdminPanel = () => {
                 Loading users…
               </p>
             ) : (
-              users.map((u) => (
+              <>
+                {usersError && (
+                  <p
+                    role="alert"
+                    style={{
+                      color: '#ef4444',
+                      background: 'rgba(239,68,68,0.08)',
+                      border: '1px solid rgba(239,68,68,0.25)',
+                      borderRadius: 12,
+                      padding: 12,
+                      marginBottom: 14,
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Could not load users: {usersError} Confirm that your account profile has the admin role and that the deployed Firestore rules are up to date.
+                  </p>
+                )}
+                <label style={{
+                  display: 'block',
+                  marginBottom: 14,
+                  fontSize: 12,
+                  color: 'var(--text-secondary)',
+                }}>
+                  Search users
+                  <input
+                    type="search"
+                    value={userSearch}
+                    onChange={(event) => setUserSearch(event.target.value)}
+                    placeholder="Name, email, or user ID"
+                    style={{
+                      width: '100%',
+                      marginTop: 6,
+                      padding: '12px 14px',
+                      borderRadius: 12,
+                      border: '1px solid var(--border-light)',
+                      background: 'var(--bg-secondary)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+                </label>
+                {visibleUsers.length === 0 && !usersError && (
+                  <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: 24 }}>
+                    No matching users.
+                  </p>
+                )}
+              {visibleUsers.map((u) => (
                 <div
                   key={u.uid}
                   style={{
@@ -908,7 +1028,28 @@ const AdminPanel = () => {
                     </div>
                   </div>
 
-                  {u.role !== 'admin' && (
+                  <button
+                    type="button"
+                    aria-expanded={expandedUsers[u.uid] !== false}
+                    onClick={() => setExpandedUsers((previous) => ({
+                      ...previous,
+                      [u.uid]: previous[u.uid] === false,
+                    }))}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: 9,
+                      border: '1px solid var(--border)',
+                      background: 'var(--bg-secondary)',
+                      color: 'var(--text-secondary)',
+                      fontSize: 12,
+                      marginBottom: 10,
+                    }}
+                  >
+                    {expandedUsers[u.uid] === false ? 'Show user details' : 'Hide user details'}
+                  </button>
+
+                  {expandedUsers[u.uid] !== false && u.role !== 'admin' && (
                     <div
                       style={{
                         display: 'flex',
@@ -1173,10 +1314,15 @@ const AdminPanel = () => {
                           View History
                         </button>
                       </div>
+                      <WithdrawalSettingsForm
+                        user={u}
+                        onSaved={handleWithdrawalSettingsSaved}
+                      />
                     </div>
                   )}
                 </div>
-              ))
+              ))}
+              </>
             )}
           </div>
         )}
@@ -1273,30 +1419,32 @@ const AdminPanel = () => {
                     </p>
                   </div>
 
-                  <button
-                    onClick={() =>
-                      handleHistoryDelete(
-                        tx
-                      )
-                    }
-                    style={{
-                      background:
-                        'rgba(239,68,68,0.12)',
-                      border:
-                        '1px solid rgba(239,68,68,0.3)',
-                      borderRadius: 8,
-                      padding:
-                        '6px 10px',
-                      color:
-                        '#ef4444',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor:
-                        'pointer',
-                    }}
-                  >
-                    Delete
-                  </button>
+                  {!tx.withdrawalId && (
+                    <button
+                      onClick={() =>
+                        handleHistoryDelete(
+                          tx
+                        )
+                      }
+                      style={{
+                        background:
+                          'rgba(239,68,68,0.12)',
+                        border:
+                          '1px solid rgba(239,68,68,0.3)',
+                        borderRadius: 8,
+                        padding:
+                          '6px 10px',
+                        color:
+                          '#ef4444',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor:
+                          'pointer',
+                      }}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
 
                 {/* Transaction date + Save button */}
@@ -1376,5 +1524,3 @@ const AdminPanel = () => {
 };
 
 export default AdminPanel;
-
-

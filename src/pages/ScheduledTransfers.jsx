@@ -8,6 +8,7 @@ import {
 } from '../firebase/firestore';
 import BottomNav from '../components/ui/BottomNav';
 import Modal from '../components/ui/Modal';
+import { useCurrency } from '../hooks/useCurrency';
 
 const FREQUENCIES = [
   { key: 'daily', label: 'Daily' },
@@ -17,6 +18,7 @@ const FREQUENCIES = [
 
 const ScheduledTransfers = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
   const { currentUser } = useAuth();
   const [tab, setTab] = useState('new');
   const [query, setQuery] = useState('');
@@ -33,7 +35,7 @@ const ScheduledTransfers = () => {
   const [error, setError] = useState('');
   const [cancelModal, setCancelModal] = useState(null);
 
-  const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmt = formatCurrency;
   const quickAmounts = [50, 100, 250, 500];
 
   useEffect(() => {

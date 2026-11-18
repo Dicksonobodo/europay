@@ -7,9 +7,11 @@ import TransactionItem from '../components/dashboard/TransactionItem';
 import Modal from '../components/ui/Modal';
 import { getCategoryInfo } from '../utils/categories';
 import BottomNav from '../components/ui/BottomNav';
+import { useCurrency } from '../hooks/useCurrency';
 
 const TransactionHistory = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
   const { currentUser, userData } = useAuth();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,7 +21,7 @@ const TransactionHistory = () => {
   const [dateDraft, setDateDraft] = useState('');
   const transactionUnsubRef = useRef(null);
 
-  const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmt = formatCurrency;
 
   const formatDateInputValue = (dateValue) => {
     const d = dateValue?.toDate?.() || new Date(dateValue || Date.now());
@@ -102,6 +104,15 @@ const TransactionHistory = () => {
     setSelected(null);
   };
 
+  const handleDeleteFromList = async (tx) => {
+    try {
+      await deleteTransaction(currentUser.uid, tx.id);
+      refreshTransactions();
+    } catch (error) {
+      alert(`Could not delete transaction: ${error.message}`);
+    }
+  };
+
   useEffect(() => {
     if (selected) {
       setDateDraft(formatDateInputValue(selected.date));
@@ -164,29 +175,31 @@ const TransactionHistory = () => {
                     <div style={{ flex: 1 }}>
                       <TransactionItem tx={tx} onClick={() => setSelected(tx)} />
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteTransaction(currentUser.uid, tx.id).then(() => refreshTransactions());
-                      }}
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 10,
-                        border: '1px solid rgba(239,68,68,0.3)',
-                        background: 'rgba(239,68,68,0.1)',
-                        color: '#ef4444',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                      aria-label={`Delete transaction ${tx.description}`}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {!tx.withdrawalId && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteFromList(tx);
+                        }}
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 10,
+                          border: '1px solid rgba(239,68,68,0.3)',
+                          background: 'rgba(239,68,68,0.1)',
+                          color: '#ef4444',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                        }}
+                        aria-label={`Delete transaction ${tx.description}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -226,7 +239,12 @@ const TransactionHistory = () => {
                 { label: 'Type', value: isCredit ? '↓ Received' : '↑ Sent' },
                 { label: 'Date', value: selected.date?.toDate?.()?.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) },
                 { label: 'Time', value: selected.date?.toDate?.()?.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) },
-                { label: 'Status', value: '✓ Completed' },
+                {
+                  label: 'Status',
+                  value: selected.withdrawalId
+                    ? 'Manual review — not paid out'
+                    : '✓ Completed',
+                },
                 { label: 'Account', value: userData?.fullName },
               ].map(({ label, value }, i, arr) => (
                 <div key={label} style={{

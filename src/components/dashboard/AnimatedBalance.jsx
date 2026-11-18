@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const AnimatedBalance = ({ value = 0, duration = 1000 }) => {
+  const { formatCurrency } = useCurrency();
   const [display, setDisplay] = useState(0);
   const frameRef = useRef(null);
   const startRef = useRef(null);
@@ -30,9 +32,7 @@ const AnimatedBalance = ({ value = 0, duration = 1000 }) => {
     return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
   }, [value, duration]);
 
-  const formatted = new Intl.NumberFormat('en-US', {
-    style: 'currency', currency: 'EUR',
-  }).format(display);
+  const formatted = formatCurrency(display);
 
   return <span>{formatted}</span>;
 };

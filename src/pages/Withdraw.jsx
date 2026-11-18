@@ -1,139 +1,669 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Lock, Check } from 'lucide-react';
-import { withdrawFunds } from '../firebase/firestore';
+import {
+  ArrowLeft, Bitcoin, Building2, Check, Clock3, CreditCard, Globe2, LockKeyhole,
+} from 'lucide-react';
+import { getAppDefaults, getRecentWithdrawals, withdrawFunds } from '../firebase/firestore';
 import useAuth from '../hooks/useAuth';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import BottomNav from '../components/ui/BottomNav';
+import CardWithdrawalDetails from '../components/withdrawal/CardWithdrawalDetails';
+import BankTransferDetails from '../components/withdrawal/BankTransferDetails';
+import { useCurrency } from '../hooks/useCurrency';
+import {
+  DEFAULT_MINIMUM_WITHDRAWAL_MINOR,
+  formatMinorUnits,
+  getWithdrawalRequirementLabel,
+  getWithdrawalRequirementStatusLabel,
+  getSafePayoutSummary,
+  isWithdrawalRequirementBlocked,
+  parseAmountToMinorUnits,
+  resolveWithdrawalRequirement,
+  resolveWithdrawalStage,
+  validateWithdrawalAmount,
+  validateWithdrawalDetails,
+} from '../utils/withdrawal';
+
+const METHODS = [
+  { id: 'bitcoin', label: 'Bitcoin', Icon: Bitcoin },
+  { id: 'card', label: 'Card', Icon: CreditCard },
+  { id: 'bank', label: 'Bank transfer', Icon: Building2 },
+  { id: 'wire', label: 'International wire', Icon: Globe2 },
+];
+
+const INITIAL_DETAILS = {
+  bitcoin: { address: '' },
+  card: { cardNumber: '', cardholderName: '', expiry: '' },
+  bank: {
+    bankName: '',
+    country: '',
+    accountNumber: '',
+    routingCode: '',
+    selectedBank: null,
+    manualEntry: false,
+  },
+  wire: { iban: '', accountNumber: '', swift: '', beneficiaryName: '', beneficiaryAddress: '' },
+};
 
 const Withdraw = () => {
   const navigate = useNavigate();
   const { currentUser, userData, refreshUserData } = useAuth();
+  const { formatCurrency } = useCurrency();
   const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState('bitcoin');
+  const [details, setDetails] = useState(INITIAL_DETAILS);
+  const [defaults, setDefaults] = useState({});
+  const [defaultsError, setDefaultsError] = useState('');
   const [confirm, setConfirm] = useState(false);
+  const [requirementOpen, setRequirementOpen] = useState(false);
+  const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
-  const [tierModal, setTierModal] = useState(userData?.tier === 1);
+  const [pageNotice, setPageNotice] = useState('');
+  const [history, setHistory] = useState([]);
+  const [historyError, setHistoryError] = useState('');
 
-  const quickAmounts = [50, 100, 250, 500];
-  const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmt = formatCurrency;
+
+  const minimumMinor = defaults.minimumWithdrawalMinor ?? DEFAULT_MINIMUM_WITHDRAWAL_MINOR;
+  const balanceMinor = Math.max(0, Math.round(Number(userData?.balance || 0) * 100));
+  const stage = resolveWithdrawalStage(userData);
+  const withdrawalRequirement = resolveWithdrawalRequirement(userData);
+  const requirementBlocked = isWithdrawalRequirementBlocked(userData);
+  const stageAmountMinor = Number(userData?.requiredAmountMinor || 0);
+  const requirementAmountLabel = stageAmountMinor > 0
+    ? fmt(stageAmountMinor / 100)
+    : 'Not configured';
+  const parsedAmountMinor = parseAmountToMinorUnits(amount);
+  const selectedMethod = METHODS.find((item) => item.id === method);
+
+  useEffect(() => {
+    let active = true;
+    getAppDefaults()
+      .then((appDefaults) => {
+        if (active) setDefaults(appDefaults);
+      })
+      .catch((loadError) => {
+        if (active) setDefaultsError(loadError.message || 'Could not load withdrawal settings.');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return undefined;
+    let active = true;
+    getRecentWithdrawals(currentUser.uid)
+      .then((items) => {
+        if (active) setHistory(items);
+      })
+      .catch((loadError) => {
+        if (active) setHistoryError(loadError.message || 'Could not load withdrawal history.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentUser]);
+
+  const amountError = useMemo(() => {
+    if (!amount) return '';
+    if (parsedAmountMinor === null) return 'Enter an amount with no more than two decimal places.';
+    return validateWithdrawalAmount(
+      parsedAmountMinor,
+      balanceMinor,
+      minimumMinor,
+      Boolean(userData?.isFrozen)
+    );
+  }, [amount, parsedAmountMinor, balanceMinor, minimumMinor, userData?.isFrozen]);
+
+  const updateDetail = (field, value) => {
+    setDetails((previous) => ({
+      ...previous,
+      [method]: {
+        ...previous[method],
+        [field]: value,
+        ...(method === 'bank' && ['bankName', 'country', 'routingCode'].includes(field)
+          ? { selectedBank: null }
+          : {}),
+      },
+    }));
+    setError('');
+  };
+
+  const handleBankSelect = (bankDetails) => {
+    setDetails((previous) => ({ ...previous, bank: bankDetails }));
+    setError('');
+  };
+
+  const setQuickAmount = (percentage) => {
+    const value = percentage === 100
+      ? balanceMinor
+      : Math.floor(balanceMinor * percentage / 100);
+    setAmount(formatMinorUnits(value));
+    setError('');
+  };
+
+  const handleContinue = () => {
+    setError('');
+    if (parsedAmountMinor === null) {
+      setError('Enter a valid withdrawal amount with up to two decimal places.');
+      return;
+    }
+
+    const validationError = validateWithdrawalAmount(
+      parsedAmountMinor,
+      balanceMinor,
+      minimumMinor,
+      Boolean(userData?.isFrozen)
+    );
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    if (userData?.isSuspended) {
+      setError('Your account is suspended. Contact support before requesting a withdrawal.');
+      return;
+    }
+
+    if (requirementBlocked) {
+      setRequirementOpen(true);
+      return;
+    }
+    if (stage !== 'enabled') {
+      setRequirementOpen(true);
+      return;
+    }
+    if (userData?.withdrawalStage && userData.isPro !== true) {
+      setError('Withdrawal settings are inconsistent. Contact support before continuing.');
+      return;
+    }
+
+    const methodError = validateWithdrawalDetails(method, details[method]);
+    if (methodError) {
+      setError(methodError);
+      return;
+    }
+
+    setConfirm(true);
+  };
 
   const handleWithdraw = async () => {
     setLoading(true);
     setError('');
+    setPageNotice('');
     try {
-      await withdrawFunds(currentUser.uid, parseFloat(amount));
-      await refreshUserData();
-      setSuccess(true);
+      const payout = getSafePayoutSummary(method, details[method]);
+      const result = await withdrawFunds(currentUser.uid, parsedAmountMinor, method, payout);
+      setDetails((previous) => ({
+        ...previous,
+        card: { ...previous.card, cardNumber: '' },
+      }));
+      const nextReceipt = {
+        ...result,
+        amountMinor: parsedAmountMinor,
+        method: selectedMethod.label,
+        destination: payout.destination,
+        beneficiary: payout.beneficiary || 'Not specified',
+        status: 'Manual review requested — not paid out',
+        arrival: 'No verified payout estimate; this app records simulated/manual requests only.',
+        createdAt: new Date(),
+      };
+      setReceipt(nextReceipt);
+      setHistory((previous) => [nextReceipt, ...previous].slice(0, 5));
       setConfirm(false);
-    } catch (e) {
-      setError(e.message);
-      setConfirm(false);
+      try {
+        await refreshUserData();
+      } catch (refreshError) {
+        setPageNotice(`Request recorded, but the balance display could not refresh: ${refreshError.message}`);
+      }
+    } catch (withdrawError) {
+      setError(withdrawError.message || 'Could not record this withdrawal request.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  if (success) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ width: 72, height: 72, background: 'rgba(16,185,129,0.15)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-        <Check size={32} color="#10b981" />
-      </div>
-      <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>Withdrawn!</h2>
-      <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>{fmt(parseFloat(amount))} withdrawn successfully</p>
-      <Button onClick={() => navigate('/dashboard')} style={{ marginTop: 32 }} fullWidth>Back to Dashboard</Button>
-    </div>
+  const inputStyle = {
+    width: '100%',
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border-light)',
+    borderRadius: 12,
+    padding: '12px 14px',
+    color: 'var(--text-primary)',
+    marginTop: 6,
+  };
+
+  const detailInput = (field, label, options = {}) => (
+    <label key={field} style={{
+      display: 'block',
+      fontSize: 13,
+      color: 'var(--text-secondary)',
+      marginBottom: 12,
+      ...options.wrapperStyle,
+    }}>
+      {label}
+      <input
+        data-withdrawal-field={field}
+        type={options.type || 'text'}
+        inputMode={options.inputMode}
+        autoComplete="off"
+        maxLength={options.maxLength}
+        placeholder={options.placeholder}
+        value={details[method][field]}
+        onChange={(event) => updateDetail(field, event.target.value)}
+        style={inputStyle}
+      />
+    </label>
   );
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: 96 }}>
-      <div style={{ padding: '56px 20px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => navigate('/dashboard')} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 12, padding: 10, cursor: 'pointer' }}>
+      <header style={{ padding: '56px 20px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button
+          type="button"
+          onClick={() => navigate('/dashboard')}
+          aria-label="Back to dashboard"
+          style={{
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 10,
+          }}
+        >
           <ArrowLeft size={18} color="var(--text-secondary)" />
         </button>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>Withdraw</h1>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Withdraw your funds</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Create a simulated/manual withdrawal request</p>
         </div>
-      </div>
+      </header>
 
-      <div style={{ padding: '0 20px' }}>
-        <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '16px 20px', border: '1px solid var(--border)', marginBottom: 28 }}>
-          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Available Balance</p>
+      <main style={{ padding: '0 20px' }}>
+        {pageNotice && (
+          <p role="status" style={{ color: '#fbbf24', fontSize: 12, marginBottom: 12 }}>
+            {pageNotice}
+          </p>
+        )}
+        <section style={{
+          background: 'var(--bg-card)',
+          borderRadius: 16,
+          padding: '16px 20px',
+          border: '1px solid var(--border)',
+          marginBottom: 24,
+        }}>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Available balance</p>
           <p style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)' }}>{fmt(userData?.balance)}</p>
-        </div>
+          <p style={{ marginTop: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
+            Minimum withdrawal: {fmt(minimumMinor / 100)}
+          </p>
+        </section>
 
-        <p style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Amount</p>
+        <aside style={{
+          border: '1px solid rgba(245,158,11,0.3)',
+          borderRadius: 12,
+          background: 'rgba(245,158,11,0.08)',
+          color: '#fbbf24',
+          padding: 12,
+          fontSize: 12,
+          lineHeight: 1.5,
+          marginBottom: 22,
+        }}>
+          Balances are simulated. No payout is sent or verified by this app; requests are recorded for manual review only.
+        </aside>
 
-        <div style={{ position: 'relative', marginBottom: 16 }}>
-          <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 18, color: 'var(--purple-light)', fontWeight: 700 }}>€</span>
-          <input
+        {defaultsError && (
+          <p role="alert" style={{ color: '#ef4444', fontSize: 12, marginBottom: 12 }}>{defaultsError}</p>
+        )}
+        {userData?.isFrozen && (
+          <p role="alert" style={{
+            background: 'rgba(239,68,68,0.1)',
+            border: '1px solid rgba(239,68,68,0.3)',
+            borderRadius: 12,
+            padding: 12,
+            color: '#ef4444',
+            fontSize: 13,
+            marginBottom: 16,
+          }}>
+            <LockKeyhole size={15} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+            Account frozen. Withdrawals are unavailable until support resolves the freeze.
+          </p>
+        )}
+        {stage === 'upgrade' && !userData?.isFrozen && (
+          <p style={{
+            background: 'rgba(124,58,237,0.1)',
+            border: '1px solid rgba(124,58,237,0.25)',
+            borderRadius: 12,
+            padding: 12,
+            color: 'var(--text-secondary)',
+            fontSize: 13,
+            lineHeight: 1.5,
+            marginBottom: 16,
+          }}>
+            A premium account upgrade is required ({requirementAmountLabel}). This app does not collect upgrade payments.
+          </p>
+        )}
+        {stage !== 'enabled' && (
+          <section
+            aria-label="Withdrawal requirement status"
             style={{
-              width: '100%', background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-light)', borderRadius: 14,
-              padding: '15px 16px 15px 36px', color: 'var(--text-primary)', fontSize: 22, fontWeight: 700,
+              background: requirementBlocked ? 'rgba(124,58,237,0.1)' : 'rgba(16,185,129,0.08)',
+              border: `1px solid ${requirementBlocked ? 'rgba(124,58,237,0.25)' : 'rgba(16,185,129,0.25)'}`,
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 16,
+              color: 'var(--text-secondary)',
+              fontSize: 12,
+              lineHeight: 1.5,
             }}
-            placeholder="0.00"
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </div>
+          >
+            <p style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+              {getWithdrawalRequirementLabel(stage)} — {getWithdrawalRequirementStatusLabel(withdrawalRequirement.status)}
+            </p>
+            {withdrawalRequirement.reason && <p style={{ marginTop: 6 }}>{withdrawalRequirement.reason}</p>}
+            {withdrawalRequirement.instructions && (
+              <p style={{ marginTop: 6 }}>Instructions: {withdrawalRequirement.instructions}</p>
+            )}
+            {stage === 'processing_fee' && (
+              <p style={{ marginTop: 6, color: '#fbbf24' }}>
+                This app does not collect or verify processing-fee payments. Do not send a fee through this app; this requirement does not guarantee a payout.
+              </p>
+            )}
+            <p style={{ marginTop: 6 }}>
+              Withdrawal status: {requirementBlocked
+                ? 'Unavailable until an administrator updates the current step.'
+                : 'Any request will still be held for manual review and is not a verified payout.'}
+            </p>
+          </section>
+        )}
 
-        <div style={{ display: 'flex', gap: 10, marginBottom: 28 }}>
-          {quickAmounts.map((q) => (
-            <button key={q} onClick={() => setAmount(q.toString())} style={{
-              flex: 1, background: amount === q.toString() ? 'rgba(124,58,237,0.2)' : 'var(--bg-card)',
-              border: `1px solid ${amount === q.toString() ? 'rgba(124,58,237,0.5)' : 'var(--border)'}`,
-              borderRadius: 12, padding: '10px 0',
-              color: amount === q.toString() ? '#a78bfa' : 'var(--text-secondary)',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            }}>€{q}</button>
+        <label htmlFor="withdrawal-amount" style={{
+          display: 'block',
+          fontSize: 12,
+          color: 'var(--text-secondary)',
+          fontWeight: 600,
+          letterSpacing: 1,
+          textTransform: 'uppercase',
+          marginBottom: 8,
+        }}>
+          Withdrawal amount (EUR)
+        </label>
+        <input
+          id="withdrawal-amount"
+          type="number"
+          min={formatMinorUnits(minimumMinor)}
+          max={formatMinorUnits(balanceMinor)}
+          step="0.01"
+          inputMode="decimal"
+          placeholder="0.00"
+          value={amount}
+          onChange={(event) => {
+            setAmount(event.target.value);
+            setError('');
+          }}
+          style={{ ...inputStyle, fontSize: 22, fontWeight: 700, marginTop: 0 }}
+          aria-describedby="withdrawal-amount-help"
+        />
+        <div id="withdrawal-amount-help" style={{ display: 'flex', gap: 8, marginTop: 10, marginBottom: 22 }}>
+          {[25, 50, 75, 100].map((percentage) => (
+            <button
+              key={percentage}
+              type="button"
+              onClick={() => setQuickAmount(percentage)}
+              style={{
+                flex: 1,
+                padding: '9px 4px',
+                borderRadius: 10,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-card)',
+                color: 'var(--text-secondary)',
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              {percentage === 100 ? 'Max' : `${percentage}%`}
+            </button>
+          ))}
+        </div>
+        {(amountError || error) && (
+          <p role="alert" style={{ color: '#ef4444', fontSize: 13, margin: '-12px 0 16px' }}>
+            {error || amountError}
+          </p>
+        )}
+
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
+          Payout method
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 18 }}>
+          {METHODS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={method === id}
+              onClick={() => {
+                setMethod(id);
+                setError('');
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: 12,
+                borderRadius: 12,
+                border: `1px solid ${method === id ? 'rgba(124,58,237,0.6)' : 'var(--border)'}`,
+                background: method === id ? 'rgba(124,58,237,0.15)' : 'var(--bg-card)',
+                color: method === id ? '#c4b5fd' : 'var(--text-secondary)',
+                fontSize: 12,
+                fontWeight: 700,
+                textAlign: 'left',
+              }}
+            >
+              <Icon size={17} />
+              {label}
+            </button>
           ))}
         </div>
 
-        {error && (
-          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 12, padding: '12px 16px', color: '#ef4444', fontSize: 14, marginBottom: 16 }}>
-            {error}
-          </div>
-        )}
+        <section aria-label={`${selectedMethod.label} payout details`}>
+          {method === 'bitcoin' && detailInput('address', 'Bitcoin address', {
+            placeholder: 'bc1… or a legacy BTC address',
+            maxLength: 90,
+          })}
+          {method === 'card' && (
+            <>
+              <CardWithdrawalDetails
+                details={details.card}
+                onChange={(field, value) => updateDetail(field, value)}
+              />
+              <p style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--text-muted)', marginTop: -4, marginBottom: 12 }}>
+                The full card number is held only in this form for validation and is never sent to or stored by the app.
+              </p>
+            </>
+          )}
+          {method === 'bank' && (
+            <BankTransferDetails
+              details={details.bank}
+              onChange={(field, value) => updateDetail(field, value)}
+              onBankSelect={handleBankSelect}
+              onManualEntry={(bankDetails) => setDetails((previous) => ({ ...previous, bank: bankDetails }))}
+              onChangeSelection={(bankDetails) => setDetails((previous) => ({ ...previous, bank: bankDetails }))}
+              onSearchDirectory={() => updateDetail('manualEntry', false)}
+            >
+              {detailInput('accountNumber', 'Account number', { inputMode: 'text', maxLength: 34 })}
+              {details.bank.manualEntry && (
+                <>
+                  {detailInput('bankName', 'Bank name')}
+                  {detailInput('country', 'Country')}
+                  {detailInput('routingCode', 'SWIFT/BIC or routing code (optional)', { maxLength: 17 })}
+                </>
+              )}
+            </BankTransferDetails>
+          )}
+          {method === 'wire' && (
+            <>
+              {detailInput('iban', 'IBAN (if available)', { maxLength: 34 })}
+              {detailInput('accountNumber', 'Account number (if no IBAN)', { maxLength: 34 })}
+              {detailInput('swift', 'SWIFT/BIC', { maxLength: 11 })}
+              {detailInput('beneficiaryName', 'Beneficiary name')}
+              {detailInput('beneficiaryAddress', 'Beneficiary address', { maxLength: 200 })}
+            </>
+          )}
+        </section>
 
-        <Button onClick={() => { setError(''); setConfirm(true); }} disabled={!amount || parseFloat(amount) <= 0} fullWidth>
+        <section style={{
+          border: '1px solid var(--border)',
+          background: 'var(--bg-card)',
+          borderRadius: 14,
+          padding: 14,
+          margin: '8px 0 18px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, marginBottom: 8 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Withdrawal amount</span>
+            <strong>{fmt(parsedAmountMinor === null ? 0 : parsedAmountMinor / 100)}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, marginBottom: 8 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>App withdrawal fee</span>
+            <strong>€0.00</strong>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            No fee is collected by this app. Any requirement shown above is informational and does not guarantee a payout.
+          </p>
+          <div style={{ display: 'flex', gap: 7, alignItems: 'flex-start', marginTop: 10, fontSize: 11, color: 'var(--text-secondary)' }}>
+            <Clock3 size={14} style={{ flexShrink: 0 }} />
+            Estimated arrival: unavailable — this request is simulated/manual and no payout provider is connected.
+          </div>
+        </section>
+
+        <Button
+          onClick={handleContinue}
+          disabled={loading || Boolean(amountError) || !amount}
+          fullWidth
+        >
           Continue
         </Button>
-      </div>
 
-      {/* Tier 1 Modal */}
-      <Modal open={tierModal} title="Upgrade Required">
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{ width: 64, height: 64, background: 'rgba(245,158,11,0.12)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-            <Lock size={28} color="#f59e0b" />
+        <section style={{ marginTop: 28, paddingBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Recent withdrawals</h2>
+            <button
+              type="button"
+              onClick={() => navigate('/transactions')}
+              style={{ border: 0, background: 'transparent', color: '#a78bfa', fontSize: 12, fontWeight: 700 }}
+            >
+              All transactions
+            </button>
           </div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>
-            Withdrawals are only available for <strong style={{ color: '#f59e0b' }}>Tier 2</strong> accounts. Contact support to upgrade.
+          {historyError && <p role="alert" style={{ color: '#ef4444', fontSize: 12 }}>{historyError}</p>}
+          {history.length === 0 && !historyError ? (
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No withdrawal requests yet.</p>
+          ) : (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+              {history.map((item, index) => (
+                <div key={item.id} style={{
+                  padding: 12,
+                  borderBottom: index < history.length - 1 ? '1px solid var(--border)' : 'none',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 700 }}>
+                      {METHODS.find((entry) => entry.id === item.method)?.label || item.method}
+                    </p>
+                    <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      {item.destination || 'Destination not available'}
+                    </p>
+                    <p style={{ fontSize: 10, color: '#fbbf24', marginTop: 4 }}>
+                      Manual review — not paid out
+                    </p>
+                  </div>
+                  <strong style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+                    {fmt((item.amountMinor || 0) / 100)}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+
+      <Modal
+        open={requirementOpen}
+        onClose={() => setRequirementOpen(false)}
+        title={getWithdrawalRequirementLabel(stage)}
+      >
+        <div style={{ display: 'grid', gap: 12, fontSize: 14, color: 'var(--text-secondary)' }}>
+          <p>
+            Withdrawal amount: <strong style={{ color: 'var(--text-primary)' }}>{fmt((parsedAmountMinor || 0) / 100)}</strong>
           </p>
-        </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <Button onClick={() => navigate('/dashboard')} variant="secondary" fullWidth>Back</Button>
-          <Button onClick={() => { setTierModal(false); navigate('/support'); }} fullWidth>Contact Support</Button>
+          <p>
+            Step status:{' '}
+            <strong style={{ color: 'var(--text-primary)' }}>
+              {getWithdrawalRequirementStatusLabel(withdrawalRequirement.status)}
+            </strong>
+          </p>
+          {stage === 'upgrade' && (
+            <>
+              <p>
+                Configured premium upgrade requirement:{' '}
+                <strong style={{ color: 'var(--text-primary)' }}>{requirementAmountLabel}</strong>
+              </p>
+            </>
+          )}
+          {withdrawalRequirement.reason && <p>Why it applies: {withdrawalRequirement.reason}</p>}
+          {withdrawalRequirement.instructions && <p>Instructions: {withdrawalRequirement.instructions}</p>}
+          <p role="status" style={{ fontSize: 12, lineHeight: 1.5 }}>
+            Withdrawal status: unavailable until an administrator updates the current step.
+          </p>
+          {stage === 'processing_fee' && (
+            <p style={{ fontSize: 12, lineHeight: 1.5, color: '#fbbf24' }}>
+              This app does not collect or verify processing-fee payments. Do not send a fee through this app; this requirement does not guarantee a payout.
+            </p>
+          )}
+          <p style={{ fontSize: 12, lineHeight: 1.5, color: '#fbbf24' }}>
+            Completing a requirement does not guarantee a payout. Withdrawal requests remain simulated/manual and are not paid out by this app.
+          </p>
+          <Button onClick={() => setRequirementOpen(false)} fullWidth>Close</Button>
         </div>
       </Modal>
 
-      {/* Confirm Modal */}
-      <Modal open={confirm} onClose={() => setConfirm(false)} title="Confirm Withdrawal">
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <p style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)' }}>{fmt(parseFloat(amount || 0))}</p>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginTop: 8 }}>This will be deducted from your balance</p>
-        </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <Button onClick={() => setConfirm(false)} variant="secondary" fullWidth>Cancel</Button>
-          <Button onClick={handleWithdraw} disabled={loading} fullWidth>
-            {loading ? 'Processing…' : 'Withdraw'}
-          </Button>
+      <Modal open={confirm} onClose={() => !loading && setConfirm(false)} title="Review withdrawal request">
+        <div style={{ display: 'grid', gap: 12, fontSize: 13 }}>
+          <p style={{ fontSize: 25, fontWeight: 800 }}>{fmt((parsedAmountMinor || 0) / 100)}</p>
+          <p><span style={{ color: 'var(--text-secondary)' }}>Method: </span>{selectedMethod.label}</p>
+          <p><span style={{ color: 'var(--text-secondary)' }}>Destination: </span>{getSafePayoutSummary(method, details[method]).destination}</p>
+          <p style={{ color: '#fbbf24', lineHeight: 1.5 }}>
+            This creates a simulated/manual request only. It does not send funds or verify a payout.
+          </p>
+          {error && <p role="alert" style={{ color: '#ef4444' }}>{error}</p>}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Button onClick={() => setConfirm(false)} variant="secondary" fullWidth disabled={loading}>Cancel</Button>
+            <Button onClick={handleWithdraw} disabled={loading} fullWidth>
+              {loading ? 'Recording…' : 'Record request'}
+            </Button>
+          </div>
         </div>
       </Modal>
 
+      <Modal open={Boolean(receipt)} onClose={() => setReceipt(null)} title="Withdrawal request receipt">
+        {receipt && (
+          <div style={{ display: 'grid', gap: 11, fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, color: '#10b981' }}>
+              <Check size={18} />
+              <strong>Request recorded — not paid out</strong>
+            </div>
+            <p><span style={{ color: 'var(--text-secondary)' }}>Amount: </span>{fmt(receipt.amountMinor / 100)}</p>
+            <p><span style={{ color: 'var(--text-secondary)' }}>Method: </span>{receipt.method}</p>
+            <p><span style={{ color: 'var(--text-secondary)' }}>Destination: </span>{receipt.destination}</p>
+            <p><span style={{ color: 'var(--text-secondary)' }}>Beneficiary: </span>{receipt.beneficiary}</p>
+            <p><span style={{ color: 'var(--text-secondary)' }}>Reference: </span>{receipt.id}</p>
+            <p><span style={{ color: 'var(--text-secondary)' }}>Estimated arrival: </span>{receipt.arrival}</p>
+            <p><span style={{ color: 'var(--text-secondary)' }}>Status: </span>{receipt.status}</p>
+            <Button onClick={() => setReceipt(null)} fullWidth>Done</Button>
+          </div>
+        )}
+      </Modal>
       <BottomNav />
     </div>
   );

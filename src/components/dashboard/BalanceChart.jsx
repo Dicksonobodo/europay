@@ -1,6 +1,8 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const BalanceChart = ({ transactions }) => {
+  const { formatCurrency } = useCurrency();
   // Build running balance history from transactions (reversed = oldest first)
   const sorted = [...transactions].reverse();
   let running = 0;
@@ -31,7 +33,7 @@ const BalanceChart = ({ transactions }) => {
             contentStyle={{ background: '#13131f', border: '1px solid #1e1e30', borderRadius: 10, fontSize: 12 }}
             labelStyle={{ color: '#9ca3af' }}
             itemStyle={{ color: '#a78bfa' }}
-            formatter={(v) => [`€${v.toFixed(2)}`, 'Balance']}
+            formatter={(v) => [formatCurrency(v), 'Balance']}
           />
           <Area type="monotone" dataKey="balance" stroke="#7c3aed" strokeWidth={2} fill="url(#purpleGrad)" />
         </AreaChart>

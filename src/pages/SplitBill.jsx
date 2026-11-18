@@ -8,9 +8,11 @@ import {
 } from '../firebase/firestore';
 import BottomNav from '../components/ui/BottomNav';
 import Modal from '../components/ui/Modal';
+import { useCurrency } from '../hooks/useCurrency';
 
 const SplitBill = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
   const { currentUser, userData, refreshUserData } = useAuth();
   const [tab, setTab] = useState('new');
   const [description, setDescription] = useState('');
@@ -26,7 +28,7 @@ const SplitBill = () => {
   const [payModal, setPayModal] = useState(null);
   const [error, setError] = useState('');
 
-  const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmt = formatCurrency;
 
   useEffect(() => {
     if (!currentUser) return;

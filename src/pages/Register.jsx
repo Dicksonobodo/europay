@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { registerUser } from '../firebase/auth';
 import Button from '../components/ui/Button';
+import CurrencySelector from '../components/ui/CurrencySelector';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -54,6 +55,7 @@ const Register = () => {
 
       {/* Form */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <CurrencySelector />
         <div>
           <label style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: 0.5, display: 'block', marginBottom: 8 }}>FULL NAME</label>
           <input style={inputStyle} placeholder="John Doe" value={form.fullName}

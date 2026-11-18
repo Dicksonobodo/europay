@@ -1,13 +1,23 @@
 import {
   doc, getDoc, getDocs, collection, updateDoc, increment,
   addDoc, serverTimestamp, query, orderBy, limit,
-  onSnapshot, deleteDoc, where, setDoc, Timestamp,
+  onSnapshot, deleteDoc, where, setDoc, Timestamp, runTransaction,
 } from 'firebase/firestore';
-import { db } from './config';
+import { auth, db } from './config';
+import {
+  isWithdrawalRequirementBlocked,
+  resolveWithdrawalStage,
+  WITHDRAWAL_STAGES,
+  validateWithdrawalRequirement,
+} from '../utils/withdrawal';
 
 export const getUser = async (uid) => {
   const snap = await getDoc(doc(db, 'users', uid));
   return snap.exists() ? snap.data() : null;
+};
+
+export const updateUserPreferredCurrency = async (uid, preferredCurrency) => {
+  await updateDoc(doc(db, 'users', uid), { preferredCurrency });
 };
 
 export const getAllUsers = async () => {
@@ -66,7 +76,12 @@ export const updateTransactionDate = async (uid, txId, dateValue) => {
 };
 
 export const deleteTransaction = async (uid, txId) => {
-  await deleteDoc(doc(db, 'users', uid, 'transactions', txId));
+  const transactionRef = doc(db, 'users', uid, 'transactions', txId);
+  const snapshot = await getDoc(transactionRef);
+  if (snapshot.exists() && snapshot.data().withdrawalId) {
+    throw new Error('Withdrawal request records cannot be deleted from transaction history.');
+  }
+  await deleteDoc(transactionRef);
   notifyTransactionRefresh(uid);
 };
 
@@ -97,7 +112,11 @@ export const fundUserAccount = async (uid, amount) => {
 };
 
 export const upgradeToTier2 = async (uid) => {
-  await updateDoc(doc(db, 'users', uid), { tier: 2 });
+  await updateDoc(doc(db, 'users', uid), {
+    tier: 2,
+    isPro: true,
+    withdrawalStage: 'enabled',
+  });
   await addDoc(collection(db, 'users', uid, 'notifications'), {
     title: 'Account Upgraded',
     message: 'Your account has been upgraded to Tier 2. You can now make withdrawals.',
@@ -106,7 +125,11 @@ export const upgradeToTier2 = async (uid) => {
 };
 
 export const downgradeToTier1 = async (uid) => {
-  await updateDoc(doc(db, 'users', uid), { tier: 1 });
+  await updateDoc(doc(db, 'users', uid), {
+    tier: 1,
+    isPro: false,
+    withdrawalStage: 'upgrade',
+  });
 };
 
 export const suspendUser = async (uid, suspended) => {
@@ -134,21 +157,200 @@ export const freezeCard = async (uid, frozen) => {
 };
 
 // ── Withdraw ──────────────────────────────────────────────────
-export const withdrawFunds = async (uid, amount) => {
-  const userRef = doc(db, 'users', uid);
-  const snap = await getDoc(userRef);
-  const data = snap.data();
-  if (data.isFrozen) throw new Error('Your card is frozen. Unfreeze it to make transactions.');
-  if (data.isSuspended) throw new Error('Your account has been suspended. Contact support.');
-  if (data.balance < amount) throw new Error('Insufficient funds.');
-  const todaySpent = await getTodaySpent(uid);
-  if (todaySpent + amount > (data.dailyLimit || 1000)) {
-    throw new Error(`Daily limit of €${data.dailyLimit || 1000} reached.`);
+export const withdrawFunds = async (uid, amountMinor, method, payout) => {
+  if (!auth.currentUser || auth.currentUser.uid !== uid) {
+    throw new Error('You must be signed in to request a withdrawal.');
   }
-  await updateDoc(userRef, { balance: increment(-amount) });
-  await addDoc(collection(db, 'users', uid, 'transactions'), {
-    type: 'debit', description: 'Withdrawal', amount, date: serverTimestamp(),
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+    throw new Error('Enter a valid withdrawal amount.');
+  }
+  if (!['bitcoin', 'card', 'bank', 'wire'].includes(method)) {
+    throw new Error('Choose a supported withdrawal method.');
+  }
+
+  const userRef = doc(db, 'users', uid);
+  const amount = amountMinor / 100;
+  const todaySpent = await getTodaySpent(uid);
+  const withdrawalRef = doc(collection(db, 'users', uid, 'withdrawals'));
+  const transactionRef = doc(collection(db, 'users', uid, 'transactions'));
+  const safePayout = {
+    destination: String(payout?.destination || '').slice(0, 200),
+    beneficiary: String(payout?.beneficiary || '').slice(0, 200),
+  };
+  if (!safePayout.destination) throw new Error('Payout destination is required.');
+  if (method === 'card') {
+    safePayout.cardBrand = String(payout?.cardBrand || '').slice(0, 40);
+    safePayout.cardLast4 = /^\d{4}$/.test(payout?.cardLast4 || '') ? payout.cardLast4 : '';
+    safePayout.cardExpiry = /^\d{2}\/\d{2}$/.test(payout?.cardExpiry || '') ? payout.cardExpiry : '';
+    if (!safePayout.cardLast4 || !safePayout.cardExpiry) {
+      throw new Error('Card details are incomplete.');
+    }
+  }
+  if (method === 'bank') {
+    safePayout.bankName = String(payout?.bankName || '').slice(0, 100);
+    safePayout.country = String(payout?.country || '').slice(0, 100);
+    safePayout.accountLast4 = /^[A-Za-z0-9]{1,4}$/.test(payout?.accountLast4 || '')
+      ? payout.accountLast4
+      : '';
+    safePayout.routingCodeLast4 = String(payout?.routingCodeLast4 || '').slice(0, 4);
+    const swift = String(payout?.swift || '').toUpperCase();
+    if (swift) safePayout.swift = swift;
+    if (!safePayout.bankName || !safePayout.country || !safePayout.accountLast4) {
+      throw new Error('Bank details are incomplete.');
+    }
+  }
+
+  const result = await runTransaction(db, async (transaction) => {
+    const defaultsRef = doc(db, 'appSettings', 'defaults');
+    const [snapshot, defaultsSnapshot] = await Promise.all([
+      transaction.get(userRef),
+      transaction.get(defaultsRef),
+    ]);
+    if (!snapshot.exists()) throw new Error('Account not found.');
+    const data = snapshot.data();
+    const defaults = defaultsSnapshot.exists() ? defaultsSnapshot.data() : {};
+    const minimumWithdrawalMinor = defaults.minimumWithdrawalMinor ?? 1000;
+    if (!Number.isSafeInteger(minimumWithdrawalMinor) || minimumWithdrawalMinor <= 0) {
+      throw new Error('Withdrawal settings are invalid. Contact support.');
+    }
+    if (amountMinor < minimumWithdrawalMinor) {
+      throw new Error(`The minimum withdrawal is €${(minimumWithdrawalMinor / 100).toFixed(2)}.`);
+    }
+    const stage = resolveWithdrawalStage(data);
+
+    if (data.isFrozen) throw new Error('Your account is frozen. Contact support before requesting a withdrawal.');
+    if (data.isSuspended) throw new Error('Your account has been suspended. Contact support.');
+    if (isWithdrawalRequirementBlocked(data)) {
+      throw new Error('Complete the current withdrawal requirement before requesting a withdrawal.');
+    }
+    if (stage !== 'enabled') {
+      throw new Error(stage === 'processing_fee'
+        ? 'A withdrawal processing-fee requirement is still pending. This app does not collect or verify fee payments.'
+        : 'A premium account upgrade is required before withdrawals are enabled.');
+    }
+    if (data.withdrawalStage && data.isPro !== true) {
+      throw new Error('Withdrawal settings are inconsistent. Contact support.');
+    }
+
+    const balanceMinor = Math.round(Number(data.balance || 0) * 100);
+    if (!Number.isSafeInteger(balanceMinor) || amountMinor > balanceMinor) {
+      throw new Error('Insufficient funds.');
+    }
+    const dailyLimit = Number(data.dailyLimit || 1000);
+    if (todaySpent + amount > dailyLimit) {
+      throw new Error(`Daily limit of €${dailyLimit} reached.`);
+    }
+
+    transaction.update(userRef, {
+      balance: (balanceMinor - amountMinor) / 100,
+      lastWithdrawalId: withdrawalRef.id,
+    });
+    transaction.set(withdrawalRef, {
+      amountMinor,
+      currency: 'EUR',
+      method,
+      ...safePayout,
+      transactionId: transactionRef.id,
+      status: 'manual_review',
+      processingMode: 'simulated_manual',
+      createdAt: serverTimestamp(),
+    });
+    transaction.set(transactionRef, {
+      type: 'debit',
+      description: 'Withdrawal request (manual review)',
+      amount,
+      withdrawalId: withdrawalRef.id,
+      status: 'manual_review',
+      date: serverTimestamp(),
+    });
+    return { id: withdrawalRef.id, status: 'manual_review' };
   });
+
+  notifyTransactionRefresh(uid);
+  return result;
+};
+
+export const getRecentWithdrawals = async (uid, limitCount = 5) => {
+  if (!auth.currentUser || auth.currentUser.uid !== uid) {
+    throw new Error('You must be signed in to view withdrawal history.');
+  }
+  const snapshot = await getDocs(query(
+    collection(db, 'users', uid, 'withdrawals'),
+    orderBy('createdAt', 'desc'),
+    limit(limitCount)
+  ));
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+};
+
+const assertCurrentUserIsAdmin = async () => {
+  const caller = auth.currentUser;
+  if (!caller) throw new Error('You must be signed in to perform this action.');
+  const callerSnapshot = await getDoc(doc(db, 'users', caller.uid));
+  if (!callerSnapshot.exists() || callerSnapshot.data().role !== 'admin') {
+    throw new Error('Admin access is required.');
+  }
+};
+
+export const setWithdrawalSettings = async (uid, settings) => {
+  await assertCurrentUserIsAdmin();
+  const {
+    stage,
+    requiredAmountMinor,
+    requirement,
+  } = settings;
+  if (!WITHDRAWAL_STAGES.includes(stage)) throw new Error('Choose a valid withdrawal stage.');
+  if (!Number.isSafeInteger(requiredAmountMinor) || requiredAmountMinor < 0) {
+    throw new Error('The upgrade requirement must be a valid non-negative EUR amount.');
+  }
+  if (stage === 'upgrade' && requiredAmountMinor <= 0) {
+    throw new Error('The upgrade requirement must be greater than zero.');
+  }
+  const requirementError = validateWithdrawalRequirement(requirement, stage);
+  if (requirementError) throw new Error(requirementError);
+
+  await updateDoc(doc(db, 'users', uid), {
+    withdrawalStage: stage,
+    requiredAmountMinor,
+    withdrawalRequirement: {
+      status: requirement.status,
+      reason: requirement.reason.trim(),
+      instructions: requirement.instructions.trim(),
+    },
+    isPro: stage === 'enabled',
+    tier: stage === 'enabled' ? 2 : 1,
+    withdrawalSettingsUpdatedAt: serverTimestamp(),
+  });
+  return {
+    withdrawalStage: stage,
+    requiredAmountMinor,
+    withdrawalRequirement: {
+      status: requirement.status,
+      reason: requirement.reason.trim(),
+      instructions: requirement.instructions.trim(),
+    },
+    isPro: stage === 'enabled',
+    tier: stage === 'enabled' ? 2 : 1,
+  };
+};
+
+export const getAppDefaults = async () => {
+  const snapshot = await getDoc(doc(db, 'appSettings', 'defaults'));
+  return snapshot.exists() ? snapshot.data() : {};
+};
+
+export const setAppDefaults = async ({ upgradePlanId, minimumWithdrawalMinor }) => {
+  await assertCurrentUserIsAdmin();
+  if (typeof upgradePlanId !== 'string' || upgradePlanId.length > 100) {
+    throw new Error('Enter a valid upgrade plan ID.');
+  }
+  if (!Number.isSafeInteger(minimumWithdrawalMinor) || minimumWithdrawalMinor <= 0) {
+    throw new Error('The minimum withdrawal must be greater than zero.');
+  }
+  await setDoc(doc(db, 'appSettings', 'defaults'), {
+    upgradePlanId: upgradePlanId.trim(),
+    minimumWithdrawalMinor,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
 };
 
 // ── Transfer ──────────────────────────────────────────────────
@@ -190,11 +392,6 @@ export const getUserByAccountNumber = async (q) => {
   const users = snap.docs.map((d) => d.data());
   const q2 = q.trim().toUpperCase();
   return users.find((u) => u.iban?.toUpperCase() === q2 || String(u.cardNumber) === q2) || null;
-};
-
-// ── PIN ───────────────────────────────────────────────────────
-export const savePin = async (uid, hashedPin) => {
-  await updateDoc(doc(db, 'users', uid), { pin: hashedPin });
 };
 
 // ── Login Activity ────────────────────────────────────────────

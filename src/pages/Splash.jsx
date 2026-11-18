@@ -1,8 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
+import CurrencySelector from '../components/ui/CurrencySelector';
+import { useCurrency } from '../hooks/useCurrency';
 
 const Splash = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
 
   return (
     <div style={{
@@ -65,7 +68,7 @@ const Splash = () => {
           <p style={{ fontSize: 11, color: 'rgba(167,139,250,0.7)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 16 }}>
             Virtual Card
           </p>
-          <p style={{ fontSize: 28, fontWeight: 800, color: '#f1f1f9', marginBottom: 20 }}>€ 0.00</p>
+          <p style={{ fontSize: 28, fontWeight: 800, color: '#f1f1f9', marginBottom: 20 }}>{formatCurrency(0)}</p>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: 'rgba(241,241,249,0.5)' }}>John Doe</span>
             <span style={{ fontSize: 13, color: '#a78bfa', letterSpacing: 2 }}>•••• 4291</span>
@@ -88,6 +91,7 @@ const Splash = () => {
 
       {/* CTA */}
       <div style={{ width: '100%', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <CurrencySelector />
         <Button onClick={() => navigate('/register')} fullWidth>
           Create Account
         </Button>

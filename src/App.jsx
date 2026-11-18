@@ -4,7 +4,6 @@ import './App.css';
 import { AuthProvider } from './context/AuthContext';
 import PrivateRoute from './routes/PrivateRoute';
 import AdminRoute from './routes/AdminRoute';
-import { PinEntry } from './components/admin/security/PinLock';
 import Onboarding from './pages/Onboarding';
 
 import Splash from './pages/Splash';
@@ -21,25 +20,16 @@ import ScheduledTransfers from './pages/ScheduledTransfers';
 import SplitBill from './pages/SplitBill';
 import Analytics from './pages/Analytics';
 import TransactionHistory from './pages/TransactionHistory';
+import { CurrencyProvider } from './context/CurrencyContext.jsx';
 
 const AppRoutes = () => {
-  const [pinUnlocked, setPinUnlocked] = useState(false);
-  const [pinRequired, setPinRequired] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    const storedPin = localStorage.getItem('europay_pin');
     const onboardingDone = localStorage.getItem('europay_onboarding_done');
-    if (storedPin) setPinRequired(true);
-    else setPinUnlocked(true);
+    localStorage.removeItem('europay_pin');
     if (!onboardingDone) setShowOnboarding(true);
   }, []);
-
-  const handleForgotPin = () => {
-    localStorage.removeItem('europay_pin');
-    setPinRequired(false);
-    setPinUnlocked(true);
-  };
 
   const handleOnboardingFinish = () => {
     localStorage.setItem('europay_onboarding_done', 'true');
@@ -47,15 +37,6 @@ const AppRoutes = () => {
   };
 
   if (showOnboarding) return <Onboarding onFinish={handleOnboardingFinish} />;
-
-  if (pinRequired && !pinUnlocked) {
-    return (
-      <PinEntry
-        onSuccess={() => { setPinUnlocked(true); setPinRequired(false); }}
-        onForgot={handleForgotPin}
-      />
-    );
-  }
 
   return (
     <Routes>
@@ -81,9 +62,11 @@ const AppRoutes = () => {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <CurrencyProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </CurrencyProvider>
     </AuthProvider>
   );
 }

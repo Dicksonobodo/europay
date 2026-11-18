@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Settings, Bell, Shield, HelpCircle, Users, Lock, MessageCircle,
-  Copy, Check, LogOut, ChevronRight, ShieldCheck, Fingerprint,
+  Copy, Check, LogOut, ChevronRight, ShieldCheck,
   Activity, Snowflake, Sliders, Camera, LoaderCircle,
 } from 'lucide-react';
 import { logoutUser } from '../firebase/auth';
@@ -10,9 +10,9 @@ import { freezeCard, setDailyLimit, updateProfilePicture } from '../firebase/fir
 import useAuth from '../hooks/useAuth';
 import BottomNav from '../components/ui/BottomNav';
 import Modal from '../components/ui/Modal';
-import { PinSetup } from '../components/admin/security/PinLock';
 import LoginActivity from '../components/admin/security/LoginActivity';
 import NotificationCentre from '../components/admin/security/NotificationCentre';
+import { useCurrency } from '../hooks/useCurrency';
 
 const CLOUDINARY_CLOUD = 'gq3ylbtt';
 const CLOUDINARY_PRESET = 'europay_uploads';
@@ -20,17 +20,16 @@ const CLOUDINARY_PRESET = 'europay_uploads';
 const Profile = () => {
   const navigate = useNavigate();
   const { userData, currentUser, refreshUserData } = useAuth();
+  const { formatCurrency } = useCurrency();
   const [copied, setCopied] = useState(false);
   const [copiedIban, setCopiedIban] = useState(false);
   const [logoutModal, setLogoutModal] = useState(false);
-  const [showPinSetup, setShowPinSetup] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [newLimit, setNewLimit] = useState('');
   const [freezeLoading, setFreezeLoading] = useState(false);
   const [limitLoading, setLimitLoading] = useState(false);
-  const [pinSaved, setPinSaved] = useState(!!localStorage.getItem('europay_pin'));
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState('');
   const fileInputRef = useRef(null);
@@ -124,23 +123,10 @@ const Profile = () => {
     return iban.replace(/(.{4})/g, '$1 ').trim();
   };
 
-  if (showPinSetup) return (
-    <PinSetup
-      onSave={() => { setPinSaved(true); setShowPinSetup(false); }}
-      onSkip={() => setShowPinSetup(false)}
-    />
-  );
   if (showActivity) return <LoginActivity onBack={() => setShowActivity(false)} />;
   if (showNotifications) return <NotificationCentre onBack={() => setShowNotifications(false)} />;
 
   const securityItems = [
-    {
-      icon: Fingerprint,
-      label: pinSaved ? 'Change PIN' : 'Set Up PIN Lock',
-      sublabel: pinSaved ? 'PIN is active' : 'Secure your app with a PIN',
-      action: () => setShowPinSetup(true),
-      color: '#7c3aed',
-    },
     {
       icon: Snowflake,
       label: userData?.isFrozen ? 'Unfreeze Card' : 'Freeze Card',
@@ -152,7 +138,7 @@ const Profile = () => {
     {
       icon: Sliders,
       label: 'Daily Spending Limit',
-      sublabel: `Current limit: €${userData?.dailyLimit || 1000}`,
+      sublabel: `Current limit: ${formatCurrency(userData?.dailyLimit || 1000)} display estimate`,
       action: () => setShowLimitModal(true),
       color: '#f59e0b',
     },
@@ -445,7 +431,7 @@ const Profile = () => {
       {/* Daily Limit Modal */}
       <Modal open={showLimitModal} onClose={() => setShowLimitModal(false)} title="Set Daily Limit">
         <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 16 }}>
-          Current limit: <strong style={{ color: 'var(--text-primary)' }}>€{userData?.dailyLimit || 1000}</strong>
+          Current limit: <strong style={{ color: 'var(--text-primary)' }}>{formatCurrency(userData?.dailyLimit || 1000)}</strong> <span>(display estimate)</span>
         </p>
         <div style={{ position: 'relative', marginBottom: 20 }}>
           <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 16, color: 'var(--purple-light)', fontWeight: 700 }}>€</span>

@@ -9,9 +9,11 @@ import { CATEGORIES, getCategoryInfo } from '../utils/categories';
 import { getBudgets, saveBudget } from '../firebase/firestore';
 import BottomNav from '../components/ui/BottomNav';
 import Modal from '../components/ui/Modal';
+import { useCurrency } from '../hooks/useCurrency';
 
 const Analytics = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
   const { currentUser, userData } = useAuth();
   const [tab, setTab] = useState('overview');
   const [transactions, setTransactions] = useState([]);
@@ -21,7 +23,7 @@ const Analytics = () => {
   const [budgetAmount, setBudgetAmount] = useState('');
   const [savingBudget, setSavingBudget] = useState(false);
 
-  const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmt = formatCurrency;
 
   useEffect(() => {
     if (!currentUser) return;
@@ -196,7 +198,7 @@ const Analytics = () => {
                       return (
                         <div key={m.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
                           <p style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600 }}>
-                            {m.amount > 0 ? `€${Math.round(m.amount)}` : ''}
+                            {m.amount > 0 ? fmt(m.amount) : ''}
                           </p>
                           <div style={{
                             width: '100%', borderRadius: 6,

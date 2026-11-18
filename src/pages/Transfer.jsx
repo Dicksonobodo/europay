@@ -6,9 +6,11 @@ import useAuth from '../hooks/useAuth';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import BottomNav from '../components/ui/BottomNav';
+import { useCurrency } from '../hooks/useCurrency';
 
 const Transfer = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
   const { currentUser, userData, refreshUserData } = useAuth();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -21,7 +23,7 @@ const Transfer = () => {
   const [error, setError] = useState('');
 
   const quickAmounts = [50, 100, 250, 500];
-  const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
+  const fmt = formatCurrency;
 
   const handleSearch = async () => {
     if (!query.trim()) return;

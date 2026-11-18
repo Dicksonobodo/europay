@@ -1,10 +1,10 @@
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { getCategoryInfo } from '../../utils/categories';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const TransactionItem = ({ tx, onClick }) => {
+  const { formatCurrency } = useCurrency();
   const isCredit = tx.type === 'credit';
-  const fmt = (n) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
   const date = tx.date?.toDate?.() || new Date();
   const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -52,7 +52,7 @@ const TransactionItem = ({ tx, onClick }) => {
         fontSize: 15, fontWeight: 700,
         color: isCredit ? '#10b981' : '#ef4444',
       }}>
-        {isCredit ? '+' : '-'}{fmt(tx.amount)}
+        {isCredit ? '+' : '-'}{formatCurrency(tx.amount)}
       </p>
     </div>
   );

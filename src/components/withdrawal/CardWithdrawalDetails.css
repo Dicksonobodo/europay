@@ -1,0 +1,106 @@
+.card-withdrawal-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.withdrawal-card-preview {
+  aspect-ratio: 1.586;
+  min-width: 0;
+  padding: clamp(10px, 3vw, 15px);
+  border: 1px solid rgba(196, 181, 253, 0.3);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 90% 15%, rgba(167, 139, 250, 0.35), transparent 38%),
+    linear-gradient(135deg, #26134b, #10101b 72%);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #f5f3ff;
+  overflow: hidden;
+}
+
+.withdrawal-card-preview__top,
+.withdrawal-card-preview__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.withdrawal-card-preview__chip {
+  width: 23px;
+  height: 17px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  background: linear-gradient(135deg, #e5c779, #a88138);
+}
+
+.withdrawal-card-preview__brand {
+  max-width: 65%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.withdrawal-card-preview__number {
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(10px, 2.7vw, 14px);
+  letter-spacing: 0.035em;
+}
+
+.withdrawal-card-preview__name,
+.withdrawal-card-preview__expiry {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.withdrawal-card-preview__name {
+  flex: 1;
+}
+
+.withdrawal-card-preview__name span,
+.withdrawal-card-preview__expiry span {
+  color: rgba(245, 243, 255, 0.65);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.withdrawal-card-preview__name strong,
+.withdrawal-card-preview__expiry strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.withdrawal-card-preview__expiry {
+  flex: 0 0 auto;
+}
+
+.card-withdrawal-fields {
+  min-width: 0;
+}
+
+@media (max-width: 350px) {
+  .card-withdrawal-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .withdrawal-card-preview {
+    width: 100%;
+  }
+}
