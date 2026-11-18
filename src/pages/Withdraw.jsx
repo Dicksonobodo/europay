@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, ArrowLeft, Bitcoin, Building2, Check, Clock3, CreditCard, Globe2, LockKeyhole,
@@ -15,7 +15,6 @@ import {
   DEFAULT_MINIMUM_WITHDRAWAL_MINOR,
   formatMinorUnits,
   getWithdrawalRequirementCopy,
-  getRequirementEmailStatusMessage,
   getWithdrawalRequirementAmounts,
   getWithdrawalFlowAction,
   getSafePayoutSummary,
@@ -25,7 +24,6 @@ import {
   validateWithdrawalAmount,
   validateWithdrawalDetails,
 } from '../utils/withdrawal';
-import { sendWithdrawalRequirementEmail } from '../utils/withdrawalRequirementEmail';
 
 const METHODS = [
   { id: 'bitcoin', label: 'Bitcoin', Icon: Bitcoin },
@@ -59,8 +57,6 @@ const Withdraw = () => {
   const [defaultsError, setDefaultsError] = useState('');
   const [confirm, setConfirm] = useState(false);
   const [requirementOpen, setRequirementOpen] = useState(false);
-  const [requirementEmailStatus, setRequirementEmailStatus] = useState({ status: 'idle', message: '' });
-  const requirementEmailInFlight = useRef(false);
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -165,7 +161,7 @@ const Withdraw = () => {
     setConfirm(true);
   };
 
-  const handleContinue = async () => {
+  const handleContinue = () => {
     setError('');
     if (parsedAmountMinor === null) {
       setError('Enter a valid withdrawal amount with up to two decimal places.');
@@ -189,20 +185,6 @@ const Withdraw = () => {
 
     if (getWithdrawalFlowAction(userData) === 'show_information') {
       setRequirementOpen(true);
-      if (requirementEmailInFlight.current) return;
-      requirementEmailInFlight.current = true;
-      setRequirementEmailStatus({ status: 'sending', message: '' });
-      try {
-        await sendWithdrawalRequirementEmail(parsedAmountMinor);
-        setRequirementEmailStatus({ status: 'sent', message: '' });
-      } catch (emailError) {
-        setRequirementEmailStatus({
-          status: 'failed',
-          message: emailError.message || 'Email was not sent. You can still continue with your withdrawal request.',
-        });
-      } finally {
-        requirementEmailInFlight.current = false;
-      }
       return;
     }
     openWithdrawalConfirmation();
@@ -626,23 +608,17 @@ const Withdraw = () => {
           {withdrawalRequirement.reason && (
             <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{withdrawalRequirement.reason}</p>
           )}
-          <p
-            role={requirementEmailStatus.status === 'failed' ? 'alert' : 'status'}
-            aria-live="polite"
-            style={{
-              fontSize: 12,
-              lineHeight: 1.5,
-              color: requirementEmailStatus.status === 'failed' ? '#fca5a5' : '#cbd5e1',
-            }}
-          >
-            {getRequirementEmailStatusMessage(
-              requirementEmailStatus.status,
-              requirementEmailStatus.message
-            )}
-          </p>
           <div style={{ display: 'flex', gap: 10 }}>
             <Button onClick={() => setRequirementOpen(false)} variant="secondary" fullWidth>Close</Button>
-            <Button onClick={openWithdrawalConfirmation} fullWidth>Continue to request</Button>
+            <Button
+              onClick={() => {
+                setRequirementOpen(false);
+                navigate('/support');
+              }}
+              fullWidth
+            >
+              Contact support
+            </Button>
           </div>
           {error && <p role="alert" style={{ color: '#fca5a5', fontSize: 12 }}>{error}</p>}
         </div>

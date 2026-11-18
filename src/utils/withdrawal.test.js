@@ -3,7 +3,6 @@ import test from 'node:test';
 import {
   formatCardNumber,
   formatMinorUnits,
-  getRequirementEmailStatusMessage,
   getWithdrawalFlowAction,
   getWithdrawalRequirementAmounts,
   getWithdrawalRequirementCopy,
@@ -96,8 +95,31 @@ test('withdrawal requirement statuses show information before requests and enabl
     stage: 'upgrade',
     status: 'required',
     reason: '',
+    upgradeReason: '',
+    processingFeeReason: '',
     instructions: '',
   });
+  assert.deepEqual(resolveWithdrawalRequirement({
+    withdrawalStage: 'upgrade',
+    withdrawalRequirement: {
+      upgradeReason: 'Upgrade information.',
+      processingFeeReason: 'Processing fee information.',
+    },
+  }), {
+    stage: 'upgrade',
+    status: 'required',
+    reason: 'Upgrade information.',
+    upgradeReason: 'Upgrade information.',
+    processingFeeReason: 'Processing fee information.',
+    instructions: '',
+  });
+  assert.equal(resolveWithdrawalRequirement({
+    withdrawalStage: 'processing_fee',
+    withdrawalRequirement: {
+      upgradeReason: 'Upgrade information.',
+      processingFeeReason: 'Processing fee information.',
+    },
+  }).reason, 'Processing fee information.');
   assert.equal(getWithdrawalFlowAction({ withdrawalStage: 'upgrade' }), 'show_information');
   assert.equal(getWithdrawalFlowAction({ withdrawalStage: 'processing_fee' }), 'show_information');
   assert.equal(getWithdrawalFlowAction({ withdrawalStage: 'enabled', isPro: true }), 'continue');
@@ -166,12 +188,6 @@ test('validates stored upgrade and disclosed fee amounts as EUR minor units', ()
   }), /processing fee information amount/);
 });
 
-test('email status distinguishes sending, confirmed delivery, and failed delivery', () => {
-  assert.match(getRequirementEmailStatusMessage('sending'), /Sending/);
-  assert.match(getRequirementEmailStatusMessage('sent'), /accepted.*delivery/);
-  assert.equal(getRequirementEmailStatusMessage('failed', 'Provider unavailable; no email was sent.'), 'Provider unavailable; no email was sent.');
-});
-
 test('withdrawal requirement validation requires a reason and valid status', () => {
   assert.equal(validateWithdrawalRequirement({
     status: 'required',
@@ -180,7 +196,8 @@ test('withdrawal requirement validation requires a reason and valid status', () 
   }, 'upgrade'), '');
   assert.match(validateWithdrawalRequirement({
     status: 'in_progress',
-    reason: '',
+    upgradeReason: 'Upgrade info',
+    processingFeeReason: '',
     instructions: '',
   }, 'processing_fee'), /user-facing write-up/);
   assert.equal(validateWithdrawalRequirement({

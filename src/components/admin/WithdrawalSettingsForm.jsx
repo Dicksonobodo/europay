@@ -25,6 +25,8 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
   const [requirement, setRequirement] = useState({
     status: 'required',
     reason: '',
+    upgradeReason: '',
+    processingFeeReason: '',
     instructions: '',
   });
   const [saving, setSaving] = useState(false);
@@ -38,7 +40,13 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
   }, [user]);
 
   const updateRequirement = (field, value) => {
-    setRequirement((previous) => ({ ...previous, [field]: value }));
+    setRequirement((previous) => ({
+      ...previous,
+      [field]: value,
+      reason: field === 'upgradeReason' || field === 'processingFeeReason'
+        ? value
+        : previous.reason,
+    }));
     setFeedback(null);
   };
 
@@ -103,6 +111,9 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
             setStage(nextStage);
             setRequirement((previous) => ({
               ...previous,
+              reason: nextStage === 'upgrade'
+                ? previous.upgradeReason
+                : nextStage === 'processing_fee' ? previous.processingFeeReason : '',
               status: nextStage === 'enabled' ? 'completed' : (
                 previous.status === 'completed' ? 'required' : previous.status
               ),
@@ -159,8 +170,11 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
             maxLength={1000}
             rows={5}
             disabled={saving}
-            value={requirement.reason}
-            onChange={(event) => updateRequirement('reason', event.target.value)}
+            value={stage === 'upgrade' ? requirement.upgradeReason : requirement.processingFeeReason}
+            onChange={(event) => updateRequirement(
+              stage === 'upgrade' ? 'upgradeReason' : 'processingFeeReason',
+              event.target.value
+            )}
             placeholder="Enter information for the user."
             style={{ ...fieldStyle, marginTop: 6, resize: 'vertical' }}
           />

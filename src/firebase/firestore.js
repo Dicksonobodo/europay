@@ -387,6 +387,8 @@ export const setWithdrawalSettings = async (uid, settings) => {
     withdrawalRequirement: {
       status: requirement.status,
       reason: requirement.reason.trim(),
+      upgradeReason: (requirement.upgradeReason || (stage === 'upgrade' ? requirement.reason : '')).trim(),
+      processingFeeReason: (requirement.processingFeeReason || (stage === 'processing_fee' ? requirement.reason : '')).trim(),
       instructions: '',
     },
     withdrawalSettingsUpdatedAt: serverTimestamp(),
@@ -404,6 +406,8 @@ export const setWithdrawalSettings = async (uid, settings) => {
     withdrawalRequirement: {
       status: requirement.status,
       reason: requirement.reason.trim(),
+      upgradeReason: (requirement.upgradeReason || (stage === 'upgrade' ? requirement.reason : '')).trim(),
+      processingFeeReason: (requirement.processingFeeReason || (stage === 'processing_fee' ? requirement.reason : '')).trim(),
       instructions: '',
     },
     ...(stage === 'enabled' ? { isPro: true, tier: 2 } : {}),

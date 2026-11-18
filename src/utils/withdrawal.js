@@ -29,11 +29,19 @@ export const resolveWithdrawalRequirement = (profile) => {
   const status = stage === 'enabled'
     ? 'completed'
     : storedStatus && storedStatus !== 'completed' ? storedStatus : 'required';
+  const upgradeReason = typeof stored.upgradeReason === 'string'
+    ? stored.upgradeReason
+    : stage === 'upgrade' && typeof stored.reason === 'string' ? stored.reason : '';
+  const processingFeeReason = typeof stored.processingFeeReason === 'string'
+    ? stored.processingFeeReason
+    : stage === 'processing_fee' && typeof stored.reason === 'string' ? stored.reason : '';
 
   return {
     stage,
     status,
-    reason: typeof stored.reason === 'string' ? stored.reason : '',
+    reason: stage === 'processing_fee' ? processingFeeReason : upgradeReason,
+    upgradeReason,
+    processingFeeReason,
     instructions: typeof stored.instructions === 'string' ? stored.instructions : '',
   };
 };
@@ -49,10 +57,13 @@ export const validateWithdrawalRequirement = (requirement, stage) => {
     }
     return 'Choose a valid status for the current withdrawal step.';
   }
-  if (typeof requirement.reason !== 'string' || requirement.reason.trim().length > 1000) {
+  const reason = stage === 'processing_fee'
+    ? requirement.processingFeeReason ?? requirement.reason
+    : requirement.upgradeReason ?? requirement.reason;
+  if (typeof reason !== 'string' || reason.trim().length > 1000) {
     return 'The user-facing write-up must be 1,000 characters or fewer.';
   }
-  if (stage !== 'enabled' && !requirement.reason.trim()) {
+  if (stage !== 'enabled' && !reason.trim()) {
     return 'Enter the user-facing write-up.';
   }
   return '';
@@ -68,12 +79,12 @@ export const getWithdrawalRequirementCopy = (stage) => ({
   upgrade: {
     title: 'Premium Account Upgrade',
     amountLabel: 'Upgrade required amount',
-    action: 'Continue to withdrawal request',
+    action: 'Contact support',
   },
   processing_fee: {
     title: 'Withdrawal Processing Fee',
     amountLabel: 'Processing fee',
-    action: 'Continue to withdrawal request',
+    action: 'Contact support',
   },
   enabled: {
     title: 'Withdrawals enabled',
@@ -81,7 +92,7 @@ export const getWithdrawalRequirementCopy = (stage) => ({
   },
 }[stage] || {
   title: 'Withdrawal information',
-  action: 'Continue to withdrawal request',
+  action: 'Contact support',
 });
 
 export const getWithdrawalRequirementAmounts = (stage, profile = {}) => ({
@@ -124,7 +135,7 @@ export const getWithdrawalRequirementEmailCopy = (stage, profile = {}, amountMin
       text: [
         `Withdrawal amount requested: EUR ${requestedAmount}.`,
         `Upgrade required amount: EUR ${requirementAmount}.`,
-        requirement.reason,
+        requirement.upgradeReason || requirement.reason,
         'This message does not confirm a payout or guarantee a release of funds. Europay does not process or verify real-world payouts.',
       ].filter(Boolean).join('\n\n'),
     };
@@ -138,7 +149,7 @@ export const getWithdrawalRequirementEmailCopy = (stage, profile = {}, amountMin
       text: [
         `Withdrawal amount requested: EUR ${requestedAmount}.`,
         `Processing fee amount: EUR ${feeAmount}.`,
-        requirement.reason,
+        requirement.processingFeeReason || requirement.reason,
         'This message does not confirm a payout or guarantee a release of funds. Europay does not process or verify real-world payouts.',
       ].filter(Boolean).join('\n\n'),
     };
@@ -148,13 +159,6 @@ export const getWithdrawalRequirementEmailCopy = (stage, profile = {}, amountMin
 
 export const getWithdrawalFlowAction = (profile) =>
   resolveWithdrawalStage(profile) === 'enabled' ? 'continue' : 'show_information';
-
-export const getRequirementEmailStatusMessage = (status, errorMessage = '') => {
-  if (status === 'sending') return 'Sending requirement details to your account email…';
-  if (status === 'sent') return 'The email provider accepted the requirement details for delivery.';
-  if (status === 'failed') return errorMessage || 'Email was not sent. You can still continue with your withdrawal request.';
-  return '';
-};
 
 export const getWithdrawalRequirementStatusLabel = (status) => ({
   not_required: 'Not required',
