@@ -301,8 +301,6 @@ const Withdraw = () => {
           </p>
         </section>
 
-        
-
         {defaultsError && (
           <p role="alert" style={{ color: '#ef4444', fontSize: 12, marginBottom: 12 }}>{defaultsError}</p>
         )}
@@ -320,32 +318,6 @@ const Withdraw = () => {
             Account frozen. Withdrawals are unavailable until support resolves the freeze.
           </p>
         )}
-        {stage !== 'enabled' && (
-          <section
-            aria-label="Withdrawal requirement information"
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 12,
-              padding: 12,
-              marginBottom: 16,
-              color: 'var(--text-secondary)',
-              fontSize: 12,
-              lineHeight: 1.5,
-            }}
-          >
-            <p style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-              {getWithdrawalRequirementCopy(stage).amountLabel}:{' '}
-              {stage === 'upgrade'
-                ? upgradeAmountLabel
-                : formatRequirementAmount(requirementAmounts.processingFeeMinor)}
-            </p>
-            {withdrawalRequirement.reason && (
-              <p style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{withdrawalRequirement.reason}</p>
-            )}
-          </section>
-        )}
-
         <label htmlFor="withdrawal-amount" style={{
           display: 'block',
           fontSize: 12,
