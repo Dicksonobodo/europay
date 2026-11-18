@@ -303,9 +303,7 @@ const Withdraw = () => {
 
         
 
-        {defaultsError && (
-          <p role="alert" style={{ color: '#ef4444', fontSize: 12, marginBottom: 12 }}>{defaultsError}</p>
-        )}
+       
         {userData?.isFrozen && (
           <p role="alert" style={{
             background: 'rgba(239,68,68,0.1)',
