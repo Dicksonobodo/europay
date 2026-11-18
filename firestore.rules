@@ -34,6 +34,7 @@ service cloud.firestore {
           'role',
           'cardNumber',
           'iban',
+          'accountNumber',
           'emailVerified',
           'isFrozen',
           'isSuspended',
@@ -50,6 +51,8 @@ service cloud.firestore {
         && request.resource.data.isPro == false
         && request.resource.data.withdrawalStage == 'upgrade'
         && request.resource.data.role == 'user'
+        && request.resource.data.accountNumber is string
+        && request.resource.data.accountNumber.matches('^[0-9]{12}$')
         && request.resource.data.isFrozen == false
         && request.resource.data.isSuspended == false
         && request.resource.data.dailyLimit is number
@@ -76,17 +79,25 @@ service cloud.firestore {
           ]);
     }
 
+    function validSelfAccountNumberUpdate(uid) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let accountNumber = request.resource.data.accountNumber;
+      let directoryPath = /databases/$(database)/documents/transferRecipients/$(accountNumber);
+      return owns(uid)
+        && changed.hasOnly(['accountNumber'])
+        && resource.data.get('accountNumber', '') == ''
+        && accountNumber is string
+        && accountNumber.matches('^[0-9]{12}$')
+        && existsAfter(directoryPath)
+        && getAfter(directoryPath).data.uid == uid
+        && getAfter(directoryPath).data.accountNumber == accountNumber
+        && getAfter(directoryPath).data.fullName == resource.data.fullName;
+    }
+
     function withdrawalMinimumMinor() {
       return exists(/databases/$(database)/documents/appSettings/defaults)
         ? get(/databases/$(database)/documents/appSettings/defaults).data.minimumWithdrawalMinor
         : 1000;
-    }
-
-    function withdrawalRequirementIsComplete(user) {
-      let requirement = user.get('withdrawalRequirement', {});
-      return !('step' in requirement)
-        || requirement.step == 'none'
-        || requirement.status == 'completed';
     }
 
     function validWithdrawalShape(uid, withdrawalId) {
@@ -181,10 +192,6 @@ service cloud.firestore {
         && nextBalance is number
         && balanceDifference > 0
         && nextBalance >= 0
-        && user.isPro == true
-        && user.withdrawalStage == 'enabled'
-        && user.tier == 2
-        && withdrawalRequirementIsComplete(user)
         && user.isFrozen == false
         && user.isSuspended == false
         && validWithdrawalPair(uid, withdrawalId)
@@ -198,10 +205,6 @@ service cloud.firestore {
       let user = get(userPath).data;
       return owns(uid)
         && validWithdrawalShape(uid, withdrawalId)
-        && user.isPro == true
-        && user.withdrawalStage == 'enabled'
-        && user.tier == 2
-        && withdrawalRequirementIsComplete(user)
         && user.isFrozen == false
         && user.isSuspended == false
         && validWithdrawalPair(uid, withdrawalId);
@@ -240,6 +243,7 @@ service cloud.firestore {
       allow create: if validNewUser(uid);
       allow update: if isAdmin()
         || (owns(uid) && validSelfProfileUpdate())
+        || (owns(uid) && validSelfAccountNumberUpdate(uid))
         || (owns(uid) && validWithdrawalBalanceUpdate(uid));
       allow delete: if isAdmin();
 
@@ -308,6 +312,27 @@ service cloud.firestore {
             && request.resource.data.amount >= 0);
         allow delete: if owns(uid) || isAdmin();
       }
+    }
+
+    match /transferRecipients/{accountNumber} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'fullName', 'fullNameLower', 'accountNumber'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() > 0
+        && request.resource.data.fullNameLower is string
+        && request.resource.data.fullNameLower.size() <= 200
+        && request.resource.data.accountNumber == accountNumber
+        && accountNumber.matches('^[0-9]{12}$')
+        && getAfter(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.accountNumber == accountNumber
+        && getAfter(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.fullName == request.resource.data.fullName;
+      allow update, delete: if false;
     }
 
     match /appSettings/{settingId} {

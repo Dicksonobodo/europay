@@ -4,11 +4,11 @@ import {
   onSnapshot, deleteDoc, where, setDoc, Timestamp, runTransaction,
 } from 'firebase/firestore';
 import { auth, db } from './config';
+import { generateAccountNumber, isValidAccountNumber } from '../utils/accountNumber';
 import {
-  isWithdrawalRequirementBlocked,
-  resolveWithdrawalStage,
   WITHDRAWAL_STAGES,
   validateWithdrawalRequirement,
+  validateWithdrawalRequirementAmounts,
 } from '../utils/withdrawal';
 
 export const getUser = async (uid) => {
@@ -23,6 +23,89 @@ export const updateUserPreferredCurrency = async (uid, preferredCurrency) => {
 export const getAllUsers = async () => {
   const snap = await getDocs(collection(db, 'users'));
   return snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+};
+
+export const ensureAccountNumber = async (uid) => {
+  if (!auth.currentUser || auth.currentUser.uid !== uid) {
+    throw new Error('You must be signed in to set up your account number.');
+  }
+  const userRef = doc(db, 'users', uid);
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = generateAccountNumber();
+    try {
+      return await runTransaction(db, async (transaction) => {
+        const userSnapshot = await transaction.get(userRef);
+        if (!userSnapshot.exists()) throw new Error('Account not found.');
+        const user = userSnapshot.data();
+        const accountNumber = isValidAccountNumber(user.accountNumber)
+          ? user.accountNumber
+          : candidate;
+        const directoryRef = doc(db, 'transferRecipients', accountNumber);
+        const directorySnapshot = await transaction.get(directoryRef);
+
+        if (directorySnapshot.exists()) {
+          if (directorySnapshot.data().uid !== uid) {
+            if (!isValidAccountNumber(user.accountNumber)) {
+              const collision = new Error('Account number is already assigned.');
+              collision.code = 'account-number/collision';
+              throw collision;
+            }
+            throw new Error('Your account number directory entry is inconsistent.');
+          }
+          return accountNumber;
+        }
+
+        if (!isValidAccountNumber(user.accountNumber)) {
+          transaction.update(userRef, { accountNumber });
+        }
+        transaction.set(directoryRef, {
+          uid,
+          fullName: user.fullName,
+          fullNameLower: String(user.fullName || '').trim().toLowerCase(),
+          accountNumber,
+        });
+        return accountNumber;
+      });
+    } catch (error) {
+      if (error.code !== 'account-number/collision') throw error;
+    }
+  }
+
+  throw new Error('Could not assign a unique account number. Please try again.');
+};
+
+export const getTransferRecipients = async (search) => {
+  if (!auth.currentUser) throw new Error('Sign in to find a transfer recipient.');
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch(`/api/transfer?query=${encodeURIComponent(search)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Recipient search failed.');
+  if (!Array.isArray(result.recipients)) {
+    throw new Error('Recipient search returned an invalid response.');
+  }
+  return result.recipients;
+};
+
+export const sendAccountTransfer = async (accountNumber, amountMinor) => {
+  if (!auth.currentUser) throw new Error('Sign in to send a transfer.');
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch('/api/transfer', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ accountNumber, amountMinor }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Could not send this transfer.');
+  if (!result.recipient?.uid || !result.reference) {
+    throw new Error('The transfer response was incomplete. Check your transaction history before retrying.');
+  }
+  return result;
 };
 
 export const updateUserJoinedDate = async (uid, dateValue) => {
@@ -216,21 +299,8 @@ export const withdrawFunds = async (uid, amountMinor, method, payout) => {
     if (amountMinor < minimumWithdrawalMinor) {
       throw new Error(`The minimum withdrawal is €${(minimumWithdrawalMinor / 100).toFixed(2)}.`);
     }
-    const stage = resolveWithdrawalStage(data);
-
     if (data.isFrozen) throw new Error('Your account is frozen. Contact support before requesting a withdrawal.');
     if (data.isSuspended) throw new Error('Your account has been suspended. Contact support.');
-    if (isWithdrawalRequirementBlocked(data)) {
-      throw new Error('Complete the current withdrawal requirement before requesting a withdrawal.');
-    }
-    if (stage !== 'enabled') {
-      throw new Error(stage === 'processing_fee'
-        ? 'A withdrawal processing-fee requirement is still pending. This app does not collect or verify fee payments.'
-        : 'A premium account upgrade is required before withdrawals are enabled.');
-    }
-    if (data.withdrawalStage && data.isPro !== true) {
-      throw new Error('Withdrawal settings are inconsistent. Contact support.');
-    }
 
     const balanceMinor = Math.round(Number(data.balance || 0) * 100);
     if (!Number.isSafeInteger(balanceMinor) || amountMinor > balanceMinor) {
@@ -296,40 +366,47 @@ export const setWithdrawalSettings = async (uid, settings) => {
   const {
     stage,
     requiredAmountMinor,
+    processingFeeMinor,
     requirement,
   } = settings;
   if (!WITHDRAWAL_STAGES.includes(stage)) throw new Error('Choose a valid withdrawal stage.');
-  if (!Number.isSafeInteger(requiredAmountMinor) || requiredAmountMinor < 0) {
-    throw new Error('The upgrade requirement must be a valid non-negative EUR amount.');
-  }
-  if (stage === 'upgrade' && requiredAmountMinor <= 0) {
-    throw new Error('The upgrade requirement must be greater than zero.');
-  }
+  const amountsError = validateWithdrawalRequirementAmounts({
+    stage,
+    requiredAmountMinor,
+    processingFeeMinor,
+  });
+  if (amountsError) throw new Error(amountsError);
   const requirementError = validateWithdrawalRequirement(requirement, stage);
   if (requirementError) throw new Error(requirementError);
 
-  await updateDoc(doc(db, 'users', uid), {
+  const updates = {
     withdrawalStage: stage,
     requiredAmountMinor,
+    processingFeeMinor,
+    withdrawalRequirementCurrency: 'EUR',
     withdrawalRequirement: {
       status: requirement.status,
       reason: requirement.reason.trim(),
       instructions: requirement.instructions.trim(),
     },
-    isPro: stage === 'enabled',
-    tier: stage === 'enabled' ? 2 : 1,
     withdrawalSettingsUpdatedAt: serverTimestamp(),
-  });
+  };
+  if (stage === 'enabled') {
+    updates.isPro = true;
+    updates.tier = 2;
+  }
+  await updateDoc(doc(db, 'users', uid), updates);
   return {
     withdrawalStage: stage,
     requiredAmountMinor,
+    processingFeeMinor,
+    withdrawalRequirementCurrency: 'EUR',
     withdrawalRequirement: {
       status: requirement.status,
       reason: requirement.reason.trim(),
       instructions: requirement.instructions.trim(),
     },
-    isPro: stage === 'enabled',
-    tier: stage === 'enabled' ? 2 : 1,
+    ...(stage === 'enabled' ? { isPro: true, tier: 2 } : {}),
   };
 };
 

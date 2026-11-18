@@ -1,7 +1,8 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 
-const getAdminAuth = () => {
+export const getAdminApp = () => {
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
@@ -15,14 +16,14 @@ const getAdminAuth = () => {
     credential: cert({ projectId, clientEmail, privateKey }),
     projectId,
   });
-  return getAuth(app);
+  return app;
 };
 
 export const verifyFirebaseBearerToken = async (authorization) => {
   const match = /^Bearer\s+(.+)$/i.exec(authorization || '');
   if (!match) return null;
 
-  const auth = getAdminAuth();
+  const auth = getAuth(getAdminApp());
   try {
     return await auth.verifyIdToken(match[1]);
   } catch (error) {
@@ -30,3 +31,5 @@ export const verifyFirebaseBearerToken = async (authorization) => {
     throw error;
   }
 };
+
+export const getAdminFirestore = () => getFirestore(getAdminApp());

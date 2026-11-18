@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Bitcoin, Building2, Check, Clock3, CreditCard, Globe2, LockKeyhole,
+  AlertTriangle, ArrowLeft, Bitcoin, Building2, Check, Clock3, CreditCard, Globe2, LockKeyhole,
 } from 'lucide-react';
 import { getAppDefaults, getRecentWithdrawals, withdrawFunds } from '../firebase/firestore';
 import useAuth from '../hooks/useAuth';
@@ -15,15 +15,18 @@ import {
   DEFAULT_MINIMUM_WITHDRAWAL_MINOR,
   formatMinorUnits,
   getWithdrawalRequirementLabel,
-  getWithdrawalRequirementStatusLabel,
+  getWithdrawalRequirementCopy,
+  getRequirementEmailStatusMessage,
+  getWithdrawalRequirementAmounts,
+  getWithdrawalFlowAction,
   getSafePayoutSummary,
-  isWithdrawalRequirementBlocked,
   parseAmountToMinorUnits,
   resolveWithdrawalRequirement,
   resolveWithdrawalStage,
   validateWithdrawalAmount,
   validateWithdrawalDetails,
 } from '../utils/withdrawal';
+import { sendWithdrawalRequirementEmail } from '../utils/withdrawalRequirementEmail';
 
 const METHODS = [
   { id: 'bitcoin', label: 'Bitcoin', Icon: Bitcoin },
@@ -49,7 +52,7 @@ const INITIAL_DETAILS = {
 const Withdraw = () => {
   const navigate = useNavigate();
   const { currentUser, userData, refreshUserData } = useAuth();
-  const { formatCurrency } = useCurrency();
+  const { currency, rate, formatCurrency } = useCurrency();
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('bitcoin');
   const [details, setDetails] = useState(INITIAL_DETAILS);
@@ -57,6 +60,8 @@ const Withdraw = () => {
   const [defaultsError, setDefaultsError] = useState('');
   const [confirm, setConfirm] = useState(false);
   const [requirementOpen, setRequirementOpen] = useState(false);
+  const [requirementEmailStatus, setRequirementEmailStatus] = useState({ status: 'idle', message: '' });
+  const requirementEmailInFlight = useRef(false);
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -70,10 +75,15 @@ const Withdraw = () => {
   const balanceMinor = Math.max(0, Math.round(Number(userData?.balance || 0) * 100));
   const stage = resolveWithdrawalStage(userData);
   const withdrawalRequirement = resolveWithdrawalRequirement(userData);
-  const requirementBlocked = isWithdrawalRequirementBlocked(userData);
-  const stageAmountMinor = Number(userData?.requiredAmountMinor || 0);
-  const requirementAmountLabel = stageAmountMinor > 0
-    ? fmt(stageAmountMinor / 100)
+  const requirementAmounts = getWithdrawalRequirementAmounts(stage, userData);
+  const formatRequirementAmount = (minorUnits) => {
+    const eurAmount = `EUR ${formatMinorUnits(minorUnits)}`;
+    return currency === 'EUR' || !rate
+      ? eurAmount
+      : `${eurAmount} (${fmt(minorUnits / 100)} display estimate)`;
+  };
+  const upgradeAmountLabel = requirementAmounts.upgradeAmountMinor > 0
+    ? formatRequirementAmount(requirementAmounts.upgradeAmountMinor)
     : 'Not configured';
   const parsedAmountMinor = parseAmountToMinorUnits(amount);
   const selectedMethod = METHODS.find((item) => item.id === method);
@@ -145,7 +155,18 @@ const Withdraw = () => {
     setError('');
   };
 
-  const handleContinue = () => {
+  const openWithdrawalConfirmation = () => {
+    const methodError = validateWithdrawalDetails(method, details[method]);
+    if (methodError) {
+      setError(methodError);
+      return;
+    }
+    setError('');
+    setRequirementOpen(false);
+    setConfirm(true);
+  };
+
+  const handleContinue = async () => {
     setError('');
     if (parsedAmountMinor === null) {
       setError('Enter a valid withdrawal amount with up to two decimal places.');
@@ -167,26 +188,25 @@ const Withdraw = () => {
       return;
     }
 
-    if (requirementBlocked) {
+    if (getWithdrawalFlowAction(userData) === 'show_information') {
       setRequirementOpen(true);
+      if (requirementEmailInFlight.current) return;
+      requirementEmailInFlight.current = true;
+      setRequirementEmailStatus({ status: 'sending', message: '' });
+      try {
+        await sendWithdrawalRequirementEmail(parsedAmountMinor);
+        setRequirementEmailStatus({ status: 'sent', message: '' });
+      } catch (emailError) {
+        setRequirementEmailStatus({
+          status: 'failed',
+          message: emailError.message || 'Email was not sent. You can still continue with your withdrawal request.',
+        });
+      } finally {
+        requirementEmailInFlight.current = false;
+      }
       return;
     }
-    if (stage !== 'enabled') {
-      setRequirementOpen(true);
-      return;
-    }
-    if (userData?.withdrawalStage && userData.isPro !== true) {
-      setError('Withdrawal settings are inconsistent. Contact support before continuing.');
-      return;
-    }
-
-    const methodError = validateWithdrawalDetails(method, details[method]);
-    if (methodError) {
-      setError(methodError);
-      return;
-    }
-
-    setConfirm(true);
+    openWithdrawalConfirmation();
   };
 
   const handleWithdraw = async () => {
@@ -341,15 +361,15 @@ const Withdraw = () => {
             lineHeight: 1.5,
             marginBottom: 16,
           }}>
-            A premium account upgrade is required ({requirementAmountLabel}). This app does not collect upgrade payments.
+            Premium upgrade information: {upgradeAmountLabel}. An upgrade is optional and is not required to access your existing balance.
           </p>
         )}
         {stage !== 'enabled' && (
           <section
             aria-label="Withdrawal requirement status"
             style={{
-              background: requirementBlocked ? 'rgba(124,58,237,0.1)' : 'rgba(16,185,129,0.08)',
-              border: `1px solid ${requirementBlocked ? 'rgba(124,58,237,0.25)' : 'rgba(16,185,129,0.25)'}`,
+              background: 'rgba(245,158,11,0.08)',
+              border: '1px solid rgba(245,158,11,0.25)',
               borderRadius: 12,
               padding: 12,
               marginBottom: 16,
@@ -359,21 +379,21 @@ const Withdraw = () => {
             }}
           >
             <p style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-              {getWithdrawalRequirementLabel(stage)} — {getWithdrawalRequirementStatusLabel(withdrawalRequirement.status)}
+              {getWithdrawalRequirementLabel(stage)} — information only
             </p>
-            {withdrawalRequirement.reason && <p style={{ marginTop: 6 }}>{withdrawalRequirement.reason}</p>}
+            {withdrawalRequirement.reason && (
+              <p style={{ marginTop: 6 }}>Admin note (informational only): {withdrawalRequirement.reason}</p>
+            )}
             {withdrawalRequirement.instructions && (
-              <p style={{ marginTop: 6 }}>Instructions: {withdrawalRequirement.instructions}</p>
+              <p style={{ marginTop: 6 }}>Additional information: {withdrawalRequirement.instructions}</p>
             )}
             {stage === 'processing_fee' && (
               <p style={{ marginTop: 6, color: '#fbbf24' }}>
-                This app does not collect or verify processing-fee payments. Do not send a fee through this app; this requirement does not guarantee a payout.
+                Fee information: {formatRequirementAmount(requirementAmounts.processingFeeMinor)}. This app does not collect, verify, or deduct fees. No separate upfront payment is required.
               </p>
             )}
             <p style={{ marginTop: 6 }}>
-              Withdrawal status: {requirementBlocked
-                ? 'Unavailable until an administrator updates the current step.'
-                : 'Any request will still be held for manual review and is not a verified payout.'}
+              This status does not prevent you from requesting a withdrawal. Requests remain simulated/manual and are not verified payouts.
             </p>
           </section>
         )}
@@ -591,40 +611,83 @@ const Withdraw = () => {
       <Modal
         open={requirementOpen}
         onClose={() => setRequirementOpen(false)}
-        title={getWithdrawalRequirementLabel(stage)}
+        title={getWithdrawalRequirementCopy(stage).title}
+        headerIcon={AlertTriangle}
+        headerStyle={{
+          background: 'linear-gradient(120deg, #f97316, #fbbf24)',
+          borderRadius: 16,
+          padding: '14px 12px',
+          margin: '-8px -8px 18px',
+        }}
+        titleStyle={{ color: '#111827' }}
+        closeButtonStyle={{
+          background: 'rgba(15,23,42,0.18)',
+          color: '#111827',
+          borderColor: 'rgba(15,23,42,0.25)',
+        }}
+        surfaceStyle={{
+          background: '#071a2e',
+          borderColor: 'rgba(148,163,184,0.2)',
+          borderRadius: 24,
+        }}
       >
-        <div style={{ display: 'grid', gap: 12, fontSize: 14, color: 'var(--text-secondary)' }}>
-          <p>
-            Withdrawal amount: <strong style={{ color: 'var(--text-primary)' }}>{fmt((parsedAmountMinor || 0) / 100)}</strong>
+        <div style={{ display: 'grid', gap: 12, fontSize: 14, color: '#cbd5e1' }}>
+          <p style={{ fontSize: 13, color: '#94a3b8' }}>
+            {getWithdrawalRequirementCopy(stage).subtitle}
           </p>
           <p>
-            Step status:{' '}
-            <strong style={{ color: 'var(--text-primary)' }}>
-              {getWithdrawalRequirementStatusLabel(withdrawalRequirement.status)}
-            </strong>
+            Requested withdrawal amount: <strong style={{ color: '#f8fafc' }}>{formatRequirementAmount(parsedAmountMinor || 0)}</strong>
           </p>
           {stage === 'upgrade' && (
-            <>
-              <p>
-                Configured premium upgrade requirement:{' '}
-                <strong style={{ color: 'var(--text-primary)' }}>{requirementAmountLabel}</strong>
-              </p>
-            </>
-          )}
-          {withdrawalRequirement.reason && <p>Why it applies: {withdrawalRequirement.reason}</p>}
-          {withdrawalRequirement.instructions && <p>Instructions: {withdrawalRequirement.instructions}</p>}
-          <p role="status" style={{ fontSize: 12, lineHeight: 1.5 }}>
-            Withdrawal status: unavailable until an administrator updates the current step.
-          </p>
-          {stage === 'processing_fee' && (
-            <p style={{ fontSize: 12, lineHeight: 1.5, color: '#fbbf24' }}>
-              This app does not collect or verify processing-fee payments. Do not send a fee through this app; this requirement does not guarantee a payout.
+            <p style={{ lineHeight: 1.55 }}>
+              {getWithdrawalRequirementCopy(stage).description}
             </p>
           )}
-          <p style={{ fontSize: 12, lineHeight: 1.5, color: '#fbbf24' }}>
-            Completing a requirement does not guarantee a payout. Withdrawal requests remain simulated/manual and are not paid out by this app.
+          {stage === 'processing_fee' && (
+            <p style={{ lineHeight: 1.55 }}>{getWithdrawalRequirementCopy(stage).description}</p>
+          )}
+          {stage === 'upgrade' && (
+            <p>
+              {getWithdrawalRequirementCopy(stage).amountLabel}:{' '}
+              <strong style={{ color: '#f8fafc' }}>{upgradeAmountLabel}</strong>
+              <span> (optional information; no payment is required to request access to your existing balance)</span>
+            </p>
+          )}
+          {stage === 'processing_fee' && (
+            <p>
+              {getWithdrawalRequirementCopy(stage).amountLabel}:{' '}
+              <strong style={{ color: '#f8fafc' }}>{formatRequirementAmount(requirementAmounts.processingFeeMinor)}</strong>
+              <span> (informational only; no separate payment is collected or deducted)</span>
+            </p>
+          )}
+          {withdrawalRequirement.reason && (
+            <p>Admin note (informational only): {withdrawalRequirement.reason}</p>
+          )}
+          {withdrawalRequirement.instructions && (
+            <p>Additional information (not a payment request): {withdrawalRequirement.instructions}</p>
+          )}
+          <p style={{ fontSize: 12, lineHeight: 1.5, color: '#fdba74' }}>
+            This information does not prevent access to existing funds. No separate fee payment is requested or collected. Withdrawal requests are simulated/manual; this app does not send or verify payouts.
           </p>
-          <Button onClick={() => setRequirementOpen(false)} fullWidth>Close</Button>
+          <p
+            role={requirementEmailStatus.status === 'failed' ? 'alert' : 'status'}
+            aria-live="polite"
+            style={{
+              fontSize: 12,
+              lineHeight: 1.5,
+              color: requirementEmailStatus.status === 'failed' ? '#fca5a5' : '#cbd5e1',
+            }}
+          >
+            {getRequirementEmailStatusMessage(
+              requirementEmailStatus.status,
+              requirementEmailStatus.message
+            )}
+          </p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Button onClick={() => setRequirementOpen(false)} variant="secondary" fullWidth>Close</Button>
+            <Button onClick={openWithdrawalConfirmation} fullWidth>Continue to request</Button>
+          </div>
+          {error && <p role="alert" style={{ color: '#fca5a5', fontSize: 12 }}>{error}</p>}
         </div>
       </Modal>
 

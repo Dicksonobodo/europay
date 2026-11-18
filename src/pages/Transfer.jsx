@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ArrowLeft, Check } from 'lucide-react';
-import { getAllUsers, transferFunds } from '../firebase/firestore';
+import { getTransferRecipients, sendAccountTransfer } from '../firebase/firestore';
 import useAuth from '../hooks/useAuth';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import BottomNav from '../components/ui/BottomNav';
 import { useCurrency } from '../hooks/useCurrency';
+import { parseAmountToMinorUnits } from '../utils/withdrawal';
 
 const Transfer = () => {
   const navigate = useNavigate();
   const { formatCurrency } = useCurrency();
-  const { currentUser, userData, refreshUserData } = useAuth();
+  const { currentUser, userData, accountNumberError, refreshUserData } = useAuth();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -28,22 +29,31 @@ const Transfer = () => {
   const handleSearch = async () => {
     if (!query.trim()) return;
     setSearching(true);
+    setError('');
     try {
-      const all = await getAllUsers();
-      const filtered = all.filter(
-        (u) => u.uid !== currentUser.uid &&
-          u.fullName.toLowerCase().includes(query.toLowerCase())
+      const all = await getTransferRecipients(query);
+      const filtered = all.filter((recipient) =>
+        recipient.uid !== currentUser.uid
       );
       setResults(filtered);
-    } catch (e) { setError('Search failed'); }
-    setSearching(false);
+    } catch (searchError) {
+      setError(searchError.message || 'Recipient search failed.');
+    } finally {
+      setSearching(false);
+    }
   };
 
   const handleTransfer = async () => {
+    const amountMinor = parseAmountToMinorUnits(amount);
+    if (amountMinor === null || amountMinor <= 0) {
+      setError('Enter a valid amount with no more than two decimal places.');
+      setConfirm(false);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      await transferFunds(currentUser.uid, selected.uid, parseFloat(amount), selected.fullName);
+      await sendAccountTransfer(selected.accountNumber, amountMinor);
       await refreshUserData();
       setSuccess(true);
       setConfirm(false);
@@ -86,6 +96,11 @@ const Transfer = () => {
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Your Balance</p>
           <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{fmt(userData?.balance)}</p>
         </div>
+        {accountNumberError && (
+          <p role="alert" style={{ color: '#ef4444', fontSize: 13, marginBottom: 16 }}>
+            {accountNumberError}
+          </p>
+        )}
 
         {/* Search */}
         {!selected ? (
@@ -98,7 +113,8 @@ const Transfer = () => {
                   border: '1px solid var(--border-light)', borderRadius: 14,
                   padding: '14px 16px', color: 'var(--text-primary)', fontSize: 15,
                 }}
-                placeholder="Search by name…"
+                placeholder="Name, email, or account number"
+                aria-label="Search recipient by name, email, or account number"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -128,10 +144,17 @@ const Transfer = () => {
                 </div>
                 <div>
                   <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{u.fullName}</p>
-                  <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{u.email}</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    Account number: {u.accountNumber}
+                  </p>
                 </div>
               </button>
             ))}
+            {!searching && query.trim() && results.length === 0 && !error && (
+              <p style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 16 }}>
+                No recipient found. Check the name, email, or 12-digit Europay account number.
+              </p>
+            )}
           </>
         ) : (
           <>
@@ -143,7 +166,9 @@ const Transfer = () => {
                 </div>
                 <div>
                   <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{selected.fullName}</p>
-                  <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{selected.email}</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    Account number: {selected.accountNumber}
+                  </p>
                 </div>
                 <button onClick={() => setSelected(null)} style={{ marginLeft: 'auto', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>Change</button>
               </div>
@@ -184,7 +209,7 @@ const Transfer = () => {
               </div>
             )}
 
-            <Button onClick={() => { setError(''); setConfirm(true); }} disabled={!amount || parseFloat(amount) <= 0} fullWidth>
+            <Button onClick={() => { setError(''); setConfirm(true); }} disabled={parseAmountToMinorUnits(amount) === null || parseAmountToMinorUnits(amount) <= 0} fullWidth>
               Continue
             </Button>
           </>

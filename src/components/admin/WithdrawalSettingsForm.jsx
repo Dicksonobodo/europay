@@ -5,6 +5,7 @@ import {
   parseAmountToMinorUnits,
   resolveWithdrawalRequirement,
   resolveWithdrawalStage,
+  validateWithdrawalRequirementAmounts,
   validateWithdrawalRequirement,
 } from '../../utils/withdrawal';
 
@@ -20,6 +21,7 @@ const fieldStyle = {
 const WithdrawalSettingsForm = ({ user, onSaved }) => {
   const [stage, setStage] = useState('upgrade');
   const [upgradeAmount, setUpgradeAmount] = useState('');
+  const [processingFeeAmount, setProcessingFeeAmount] = useState('');
   const [requirement, setRequirement] = useState({
     status: 'required',
     reason: '',
@@ -31,6 +33,7 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
   useEffect(() => {
     setStage(resolveWithdrawalStage(user));
     setUpgradeAmount(formatMinorUnits(user.requiredAmountMinor || 0));
+    setProcessingFeeAmount(formatMinorUnits(user.processingFeeMinor || 0));
     setRequirement(resolveWithdrawalRequirement(user));
   }, [user]);
 
@@ -40,13 +43,15 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
   };
 
   const handleSave = async () => {
-    const requiredAmountMinor = parseAmountToMinorUnits(upgradeAmount);
-    if (requiredAmountMinor === null) {
-      setFeedback({ type: 'error', text: 'Enter an upgrade amount with no more than two decimal places.' });
-      return;
-    }
-    if (stage === 'upgrade' && requiredAmountMinor <= 0) {
-      setFeedback({ type: 'error', text: 'The upgrade requirement must be greater than zero.' });
+    const requiredAmountMinor = parseAmountToMinorUnits(upgradeAmount || '0');
+    const processingFeeMinor = parseAmountToMinorUnits(processingFeeAmount || '0');
+    const amountsError = validateWithdrawalRequirementAmounts({
+      stage,
+      requiredAmountMinor,
+      processingFeeMinor,
+    });
+    if (amountsError) {
+      setFeedback({ type: 'error', text: amountsError });
       return;
     }
     const requirementError = validateWithdrawalRequirement(requirement, stage);
@@ -61,6 +66,7 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
       const saved = await setWithdrawalSettings(user.uid, {
         stage,
         requiredAmountMinor,
+        processingFeeMinor,
         requirement,
       });
       onSaved?.(user.uid, saved);
@@ -88,7 +94,7 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
       </p>
 
       <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-        Current step
+        Current withdrawal status
         <select
           disabled={saving}
           value={stage}
@@ -105,15 +111,15 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
           }}
           style={{ ...fieldStyle, marginTop: 6 }}
         >
-          <option value="upgrade">Premium account upgrade required</option>
-          <option value="processing_fee">Withdrawal processing fee required</option>
+          <option value="upgrade">Premium account upgrade required (information only)</option>
+          <option value="processing_fee">Withdrawal processing fee required (information only)</option>
           <option value="enabled">Withdrawals enabled</option>
         </select>
       </label>
 
       {stage === 'upgrade' && (
         <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-          Upgrade requirement amount (€)
+          Premium upgrade information amount (EUR)
           <input
             type="number"
             min="0.01"
@@ -125,6 +131,23 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
               setFeedback(null);
             }}
             style={{ ...fieldStyle, marginTop: 6 }}
+        />
+        </label>
+      )}
+      {stage === 'processing_fee' && (
+        <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
+          Processing fee information amount (EUR)
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            disabled={saving}
+            value={processingFeeAmount}
+            onChange={(event) => {
+              setProcessingFeeAmount(event.target.value);
+              setFeedback(null);
+            }}
+            style={{ ...fieldStyle, marginTop: 6 }}
           />
         </label>
       )}
@@ -132,19 +155,7 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
       {stage !== 'enabled' && (
         <>
           <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-            Step status
-            <select
-              disabled={saving}
-              value={requirement.status}
-              onChange={(event) => updateRequirement('status', event.target.value)}
-              style={{ ...fieldStyle, marginTop: 6 }}
-            >
-              <option value="required">Required</option>
-              <option value="in_progress">In progress</option>
-            </select>
-          </label>
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-            Why this step applies
+            Why this information is shown
             <textarea
               maxLength={500}
               rows={3}
@@ -155,7 +166,7 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
             />
           </label>
           <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-            Supporting instructions (optional)
+            Additional information (no separate payment requests)
             <textarea
               maxLength={1000}
               rows={4}
@@ -169,7 +180,7 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
       )}
 
       <p style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5, color: 'var(--text-muted)' }}>
-        Processing fee steps are informational only: this app does not collect or verify fee payments, and a fee does not guarantee a payout.
+        Amounts are stored in EUR minor units. Premium upgrades are optional; fee information is informational only and is not collected or deducted by this app.
       </p>
       {feedback && (
         <p role={feedback.type === 'error' ? 'alert' : 'status'} style={{
@@ -198,11 +209,15 @@ const WithdrawalSettingsForm = ({ user, onSaved }) => {
       >
         {saving ? 'Saving…' : `Save requirements for ${user.fullName}`}
       </button>
-      {stage !== 'enabled' && (
-        <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>
-          Current selection: {stage === 'upgrade' ? 'Premium account upgrade required' : 'Withdrawal processing fee required'} — {requirement.status === 'in_progress' ? 'In progress' : 'Required'}
-        </p>
-      )}
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>
+        Saved status: {stage === 'upgrade' ? 'Premium account upgrade required (information only)' : stage === 'processing_fee' ? 'Withdrawal processing fee required (information only)' : 'Withdrawals enabled'}
+        <br />
+        Premium upgrade information: EUR {formatMinorUnits(user.requiredAmountMinor || 0)}
+        <br />
+        Processing fee information: EUR {formatMinorUnits(user.processingFeeMinor || 0)}
+        <br />
+        Requirement note status: {stage === 'enabled' ? 'Completed' : requirement.status === 'in_progress' ? 'In progress' : 'Information only'}
+      </p>
     </section>
   );
 };

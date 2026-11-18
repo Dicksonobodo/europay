@@ -1,5 +1,6 @@
 export const WITHDRAWAL_STAGES = ['upgrade', 'processing_fee', 'enabled'];
 export const WITHDRAWAL_REQUIREMENT_STATUSES = ['required', 'in_progress', 'completed'];
+export const WITHDRAWAL_REQUIREMENT_CURRENCY = 'EUR';
 
 export const DEFAULT_MINIMUM_WITHDRAWAL_MINOR = 1000;
 
@@ -58,15 +59,115 @@ export const validateWithdrawalRequirement = (requirement, stage) => {
   return '';
 };
 
-export const isWithdrawalRequirementBlocked = (profile) => {
-  return resolveWithdrawalStage(profile) !== 'enabled';
-};
-
 export const getWithdrawalRequirementLabel = (stage) => ({
-  upgrade: 'Premium account upgrade required',
-  processing_fee: 'Withdrawal processing fee required',
+  upgrade: 'Premium upgrade information',
+  processing_fee: 'Processing fee information',
   enabled: 'Withdrawals enabled',
 }[stage] || 'Withdrawal requirement');
+
+export const getWithdrawalRequirementCopy = (stage) => ({
+  upgrade: {
+    title: 'Premium Account Upgrade',
+    subtitle: 'Please review the upgrade requirement before proceeding.',
+    amountLabel: 'Upgrade required amount',
+    description: 'A Premium Account upgrade is optional and is not required to access or request your existing balance. This app does not collect upgrade payments or verify upgrades.',
+    action: 'Continue to withdrawal request',
+  },
+  processing_fee: {
+    title: 'Withdrawal Processing Fee',
+    subtitle: 'Please review the processing fee before proceeding.',
+    amountLabel: 'Processing fee',
+    description: 'This fee amount is informational only. This app does not collect, verify, or deduct it. No separate upfront payment is required, and this app cannot promise a payout or delivery time.',
+    action: 'Continue to withdrawal request',
+  },
+  enabled: {
+    title: 'Withdrawals enabled',
+    subtitle: '',
+    amountLabel: '',
+    description: 'You can continue with your withdrawal request.',
+    action: 'Continue',
+  },
+}[stage] || {
+  title: 'Withdrawal information',
+  description: 'Review your withdrawal information.',
+  action: 'Continue to withdrawal request',
+});
+
+export const getWithdrawalRequirementAmounts = (stage, profile = {}) => ({
+  upgradeAmountMinor: stage === 'upgrade' && Number.isSafeInteger(profile.requiredAmountMinor)
+    ? profile.requiredAmountMinor
+    : 0,
+  processingFeeMinor: stage === 'processing_fee' && Number.isSafeInteger(profile.processingFeeMinor)
+    ? profile.processingFeeMinor
+    : 0,
+  currency: profile.withdrawalRequirementCurrency || WITHDRAWAL_REQUIREMENT_CURRENCY,
+});
+
+export const validateWithdrawalRequirementAmounts = ({
+  stage,
+  requiredAmountMinor,
+  processingFeeMinor,
+}) => {
+  if (!WITHDRAWAL_STAGES.includes(stage)) return 'Choose a valid withdrawal status.';
+  if (!Number.isSafeInteger(requiredAmountMinor) || requiredAmountMinor < 0) {
+    return 'Enter a valid premium upgrade information amount in EUR.';
+  }
+  if (!Number.isSafeInteger(processingFeeMinor) || processingFeeMinor < 0) {
+    return 'Enter a valid processing fee information amount in EUR.';
+  }
+  if (stage === 'upgrade' && requiredAmountMinor <= 0) {
+    return 'Enter the premium upgrade information amount in EUR.';
+  }
+  return '';
+};
+
+export const getWithdrawalRequirementEmailCopy = (stage, profile = {}, amountMinor = 0) => {
+  const requestedAmount = formatMinorUnits(amountMinor);
+  const requirement = profile.withdrawalRequirement || {};
+  const details = [
+    requirement.reason ? `Admin-provided note (informational only): ${requirement.reason}` : '',
+    requirement.instructions ? `Additional information (not a payment request): ${requirement.instructions}` : '',
+  ].filter(Boolean);
+  if (stage === 'upgrade') {
+    const requirementAmount = Number.isSafeInteger(profile.requiredAmountMinor) && profile.requiredAmountMinor > 0
+      ? formatMinorUnits(profile.requiredAmountMinor)
+      : 'Not configured';
+    return {
+      subject: 'Information about your Europay withdrawal request',
+      text: [
+        `You requested information about a possible withdrawal of EUR ${requestedAmount}.`,
+        `Premium upgrade information: EUR ${requirementAmount}. A premium upgrade is optional and is not required to access your existing balance.`,
+        ...details,
+        'Europay does not process or verify real-world payouts.',
+      ].join('\n\n'),
+    };
+  }
+  if (stage === 'processing_fee') {
+    const feeAmount = Number.isSafeInteger(profile.processingFeeMinor)
+      ? formatMinorUnits(profile.processingFeeMinor)
+      : 'Not configured';
+    return {
+      subject: 'Information about your Europay withdrawal request',
+      text: [
+        `You requested information about a possible withdrawal of EUR ${requestedAmount}.`,
+        `Processing fee information: EUR ${feeAmount}. This is informational only; this app does not collect, verify, or deduct a processing fee.`,
+        ...details,
+        'No separate upfront payment is required. Europay does not process or verify real-world payouts.',
+      ].join('\n\n'),
+    };
+  }
+  return null;
+};
+
+export const getWithdrawalFlowAction = (profile) =>
+  resolveWithdrawalStage(profile) === 'enabled' ? 'continue' : 'show_information';
+
+export const getRequirementEmailStatusMessage = (status, errorMessage = '') => {
+  if (status === 'sending') return 'Sending requirement details to your account email…';
+  if (status === 'sent') return 'The email provider accepted the requirement details for delivery.';
+  if (status === 'failed') return errorMessage || 'Email was not sent. You can still continue with your withdrawal request.';
+  return '';
+};
 
 export const getWithdrawalRequirementStatusLabel = (status) => ({
   not_required: 'Not required',

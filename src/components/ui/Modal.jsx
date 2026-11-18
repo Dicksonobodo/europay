@@ -1,7 +1,18 @@
 import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 
-const Modal = ({ open, onClose, children, title, ariaLabel = 'Dialog' }) => {
+const Modal = ({
+  open,
+  onClose,
+  children,
+  title,
+  ariaLabel = 'Dialog',
+  headerIcon: HeaderIcon,
+  headerStyle,
+  titleStyle,
+  closeButtonStyle,
+  surfaceStyle,
+}) => {
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
   const titleId = useId();
@@ -80,13 +91,27 @@ const Modal = ({ open, onClose, children, title, ariaLabel = 'Dialog' }) => {
           overflowY: 'auto',
           border: '1px solid var(--border-light)',
           borderBottom: 'none',
+          ...surfaceStyle,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginBottom: 20,
+          ...headerStyle,
+        }}>
           {title && (
-            <h3 id={titleId} style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
-              {title}
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {HeaderIcon && <HeaderIcon size={20} aria-hidden="true" />}
+              <h3 id={titleId} style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                ...titleStyle,
+              }}>{title}</h3>
+            </div>
           )}
           {onClose && (
             <button
@@ -101,6 +126,7 @@ const Modal = ({ open, onClose, children, title, ariaLabel = 'Dialog' }) => {
                 color: 'var(--text-secondary)',
                 padding: 8,
                 display: 'inline-flex',
+                ...closeButtonStyle,
               }}
             >
               <X size={16} />

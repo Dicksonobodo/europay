@@ -5,8 +5,9 @@ import {
   sendEmailVerification,
 } from 'firebase/auth';
 import { auth, db } from './config';
-import { doc, setDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
+import { doc, runTransaction, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 import { getStoredCurrency } from '../utils/currency';
+import { generateAccountNumber } from '../utils/accountNumber';
 
 const generateIBAN = () => {
   const checkDigits = String(Math.floor(10 + Math.random() * 90));
@@ -26,7 +27,7 @@ export const registerUser = async (email, password, fullName) => {
   const cardNumber = Math.floor(1000 + Math.random() * 9000);
   const iban = generateIBAN();
 
-  await setDoc(doc(db, 'users', user.uid), {
+  const profile = {
     uid: user.uid,
     fullName,
     email,
@@ -43,7 +44,34 @@ export const registerUser = async (email, password, fullName) => {
     isSuspended: false,
     dailyLimit: 1000,
     createdAt: serverTimestamp(),
-  });
+  };
+  const userRef = doc(db, 'users', user.uid);
+  let created = false;
+  for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
+    const accountNumber = generateAccountNumber();
+    const directoryRef = doc(db, 'transferRecipients', accountNumber);
+    try {
+      await runTransaction(db, async (transaction) => {
+        const directorySnapshot = await transaction.get(directoryRef);
+        if (directorySnapshot.exists()) {
+          const collision = new Error('Account number is already assigned.');
+          collision.code = 'account-number/collision';
+          throw collision;
+        }
+        transaction.set(userRef, { ...profile, accountNumber });
+        transaction.set(directoryRef, {
+          uid: user.uid,
+          fullName,
+          fullNameLower: fullName.trim().toLowerCase(),
+          accountNumber,
+        });
+      });
+      created = true;
+    } catch (error) {
+      if (error.code !== 'account-number/collision') throw error;
+    }
+  }
+  if (!created) throw new Error('Could not assign a unique account number. Please try again.');
 
   return user;
 };

@@ -13,16 +13,17 @@ import Modal from '../components/ui/Modal';
 import LoginActivity from '../components/admin/security/LoginActivity';
 import NotificationCentre from '../components/admin/security/NotificationCentre';
 import { useCurrency } from '../hooks/useCurrency';
+import { formatAccountNumber } from '../utils/accountNumber';
 
 const CLOUDINARY_CLOUD = 'gq3ylbtt';
 const CLOUDINARY_PRESET = 'europay_uploads';
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { userData, currentUser, refreshUserData } = useAuth();
+  const { userData, currentUser, accountNumberError, refreshUserData } = useAuth();
   const { formatCurrency } = useCurrency();
   const [copied, setCopied] = useState(false);
-  const [copiedIban, setCopiedIban] = useState(false);
+  const [copiedAccountNumber, setCopiedAccountNumber] = useState(false);
   const [logoutModal, setLogoutModal] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -40,10 +41,11 @@ const Profile = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleCopyIban = () => {
-    navigator.clipboard.writeText(userData?.iban || '');
-    setCopiedIban(true);
-    setTimeout(() => setCopiedIban(false), 2000);
+  const handleCopyAccountNumber = () => {
+    if (!userData?.accountNumber) return;
+    navigator.clipboard.writeText(userData.accountNumber);
+    setCopiedAccountNumber(true);
+    setTimeout(() => setCopiedAccountNumber(false), 2000);
   };
 
   const handleLogout = async () => {
@@ -117,11 +119,6 @@ const Profile = () => {
   const joined = userData?.createdAt?.toDate?.()?.toLocaleDateString('en-GB', {
     day: '2-digit', month: 'long', year: 'numeric',
   }) || 'N/A';
-
-  const formatIban = (iban) => {
-    if (!iban) return 'Not assigned';
-    return iban.replace(/(.{4})/g, '$1 ').trim();
-  };
 
   if (showActivity) return <LoginActivity onBack={() => setShowActivity(false)} />;
   if (showNotifications) return <NotificationCentre onBack={() => setShowNotifications(false)} />;
@@ -333,25 +330,31 @@ const Profile = () => {
           </button>
         </div>
 
-        {/* IBAN */}
+        {/* Europay account number */}
         <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '16px 20px', border: '1px solid var(--border)', marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ flex: 1, marginRight: 12 }}>
-              <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Account number</p>
+              <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Europay account number</p>
               <p style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa', letterSpacing: 1, lineHeight: 1.6 }}>
-                {formatIban(userData?.iban)}
+                {formatAccountNumber(userData?.accountNumber) || 'Setting up…'}
               </p>
+              <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                Share this number to receive Europay transfers.
+              </p>
+              {accountNumberError && (
+                <p role="alert" style={{ fontSize: 11, color: '#ef4444', marginTop: 6 }}>{accountNumberError}</p>
+              )}
             </div>
-            <button onClick={handleCopyIban} style={{
-              background: copiedIban ? 'rgba(16,185,129,0.12)' : 'var(--bg-elevated)',
-              border: `1px solid ${copiedIban ? 'rgba(16,185,129,0.3)' : 'var(--border-light)'}`,
+            <button onClick={handleCopyAccountNumber} disabled={!userData?.accountNumber} style={{
+              background: copiedAccountNumber ? 'rgba(16,185,129,0.12)' : 'var(--bg-elevated)',
+              border: `1px solid ${copiedAccountNumber ? 'rgba(16,185,129,0.3)' : 'var(--border-light)'}`,
               borderRadius: 10, padding: '8px 14px',
-              color: copiedIban ? '#10b981' : 'var(--text-secondary)',
+              color: copiedAccountNumber ? '#10b981' : 'var(--text-secondary)',
               fontSize: 13, fontWeight: 600, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
             }}>
-              {copiedIban ? <Check size={14} /> : <Copy size={14} />}
-              {copiedIban ? 'Copied' : 'Copy'}
+              {copiedAccountNumber ? <Check size={14} /> : <Copy size={14} />}
+              {copiedAccountNumber ? 'Copied' : 'Copy'}
             </button>
           </div>
         </div>
