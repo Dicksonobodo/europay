@@ -1,91 +1,35 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  buildBankSearchParams,
   enableManualBankEntry,
   filterBankResults,
-  normalizeBankResults,
-  parseBankDirectoryResponse,
   selectBankDetails,
 } from './bankDirectoryData.js';
 import { getSafePayoutSummary } from './withdrawal.js';
+import { BANKS, BANKS_BY_COUNTRY } from '../data/banks.js';
 
 const banks = [
   {
     name: 'Example National Bank',
     country: 'United States',
-    countryCode: 'US',
+    flag: '🇺🇸',
     swiftCode: 'EXAMUS33',
-    city: 'New York',
-    branch: '',
   },
   {
     name: 'Example Credit Union',
     country: 'Canada',
-    countryCode: 'CA',
+    flag: '🇨🇦',
     swiftCode: 'EXAMCA22',
-    city: 'Toronto',
-    branch: '',
   },
 ];
 
-test('builds bank and SWIFT searches with an optional country filter', () => {
-  const params = buildBankSearchParams({ query: '  Example Bank ', country: ' US ' });
-  assert.equal(params.get('query'), 'Example Bank');
-  assert.equal(params.get('country'), 'US');
-  assert.equal(buildBankSearchParams({ query: 'BANK' }).get('country'), null);
-});
-
-test('requires a valid-length search term without substituting fake data', () => {
-  assert.throws(() => buildBankSearchParams({ query: 'US' }), /4-100 characters/);
-  assert.throws(() => buildBankSearchParams({ query: 'x'.repeat(101) }), /4-100 characters/);
-});
-
-test('normalizes bank directory results for display and form selection', () => {
-  assert.deepEqual(normalizeBankResults([{
-    bank: '  Example Bank  ',
-    country: 'United States',
-    country_code: 'US',
-    swift_code: 'exmpus33',
-    city: 'New York',
-    branch: 'Main Office',
-  }]), [{
-    name: 'Example Bank',
-    country: 'United States',
-    countryCode: 'US',
-    swiftCode: 'EXMPUS33',
-    city: 'New York',
-    branch: 'Main Office',
-  }]);
-});
-
-test('rejects malformed or incomplete directory entries without inventing fields', () => {
-  assert.deepEqual(normalizeBankResults([
-    { bank: 'Missing code', country: 'France' },
-    { bank: 'Bad code', country: 'France', swift_code: 'not-a-bic' },
-    { bank: '', country: 'France', swift_code: 'BNPAFRPP' },
-  ]), []);
-  assert.throws(() => normalizeBankResults(null), /invalid response/);
-});
-
-test('parses valid bank API responses and reports invalid responses clearly', () => {
-  assert.deepEqual(parseBankDirectoryResponse({
-    results: [{
-      bank: 'Example National Bank',
-      country: 'United States',
-      country_code: 'US',
-      swift_code: 'EXAMUS33',
-    }],
-  }), [{
-    name: 'Example National Bank',
-    country: 'United States',
-    countryCode: 'US',
-    swiftCode: 'EXAMUS33',
-    city: '',
-    branch: '',
-  }]);
-  assert.throws(() => parseBankDirectoryResponse({}), /API is running and deployed/);
-  assert.throws(() => parseBankDirectoryResponse({ error: 'Directory not configured.' }), /not configured/);
+test('bundles bank entries grouped by country with flags and SWIFT/BIC codes', () => {
+  assert.ok(Object.keys(BANKS_BY_COUNTRY).length > 0);
+  assert.ok(BANKS.length > 8);
+  assert.ok(BANKS.every((bank) =>
+    bank.name && bank.country && bank.flag
+    && /^[A-Z0-9]{8}(?:[A-Z0-9]{3})?$/.test(bank.swiftCode)
+  ));
 });
 
 test('bank search matches bank name, country, and SWIFT/BIC code without case sensitivity', () => {
@@ -96,6 +40,12 @@ test('bank search matches bank name, country, and SWIFT/BIC code without case se
 
 test('bank search reports no matching entries as an empty result set', () => {
   assert.deepEqual(filterBankResults(banks, 'not a listed bank'), []);
+});
+
+test('bank search shows the first eight banks when empty and caps matches at eight', () => {
+  assert.deepEqual(filterBankResults(BANKS, ''), BANKS.slice(0, 8));
+  assert.equal(filterBankResults(BANKS, 'bank').length, 8);
+  assert.equal(filterBankResults(BANKS, 'bank', 2).length, 2);
 });
 
 test('selecting a bank fills the payout fields while preserving account input', () => {
@@ -109,11 +59,13 @@ test('selecting a bank fills the payout fields while preserving account input', 
 
   assert.equal(selected.bankName, banks[1].name);
   assert.equal(selected.country, banks[1].country);
+  assert.equal(selected.selectedBank.flag, banks[1].flag);
   assert.equal(selected.routingCode, banks[1].swiftCode);
   assert.equal(selected.accountNumber, '123456789');
   assert.deepEqual(selected.selectedBank, {
     name: banks[1].name,
     country: banks[1].country,
+    flag: banks[1].flag,
     swiftCode: banks[1].swiftCode,
   });
 });
