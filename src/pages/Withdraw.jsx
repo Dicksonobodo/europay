@@ -73,9 +73,16 @@ const Withdraw = () => {
   const requirementAmounts = getWithdrawalRequirementAmounts(stage, userData);
   const formatRequirementAmount = (minorUnits) => {
     const eurAmount = `EUR ${formatMinorUnits(minorUnits)}`;
-    return currency === 'EUR' || !rate
-      ? eurAmount
-      : `${eurAmount} (${fmt(minorUnits / 100)} display estimate)`;
+    if (currency === 'EUR' || !rate) return eurAmount;
+
+    return (
+      <span style={{ display: 'inline-grid', gap: 2, textAlign: 'right' }}>
+        <span>{eurAmount}</span>
+        <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 500 }}>
+          {fmt(minorUnits / 100)}
+        </span>
+      </span>
+    );
   };
   const upgradeAmountLabel = requirementAmounts.upgradeAmountMinor > 0
     ? formatRequirementAmount(requirementAmounts.upgradeAmountMinor)
