@@ -528,42 +528,76 @@ const Withdraw = () => {
         headerIcon={AlertTriangle}
         headerStyle={{
           background: 'linear-gradient(120deg, #f97316, #fbbf24)',
-          borderRadius: 16,
-          padding: '14px 12px',
-          margin: '-8px -8px 18px',
+          borderRadius: 14,
+          padding: '12px',
+          margin: '-4px 0 16px',
         }}
         titleStyle={{ color: '#111827' }}
         closeButtonStyle={{
           background: 'rgba(15,23,42,0.18)',
           color: '#111827',
           borderColor: 'rgba(15,23,42,0.25)',
+          width: 36,
+          height: 36,
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
         surfaceStyle={{
           background: '#071a2e',
           borderColor: 'rgba(148,163,184,0.2)',
-          borderRadius: 24,
+          borderRadius: '24px 24px 0 0',
+          padding: '20px 16px 24px',
         }}
       >
-        <div style={{ display: 'grid', gap: 12, fontSize: 14, color: '#cbd5e1' }}>
-          <p>
-            Requested withdrawal amount: <strong style={{ color: '#f8fafc' }}>{formatRequirementAmount(parsedAmountMinor || 0)}</strong>
-          </p>
-          {stage === 'upgrade' && (
-            <p>
-              {getWithdrawalRequirementCopy(stage).amountLabel}:{' '}
-              <strong style={{ color: '#f8fafc' }}>{upgradeAmountLabel}</strong>
-            </p>
-          )}
-          {stage === 'processing_fee' && (
-            <p>
-              {getWithdrawalRequirementCopy(stage).amountLabel}:{' '}
-              <strong style={{ color: '#f8fafc' }}>{formatRequirementAmount(requirementAmounts.processingFeeMinor)}</strong>
-            </p>
-          )}
+        <div style={{ display: 'grid', gap: 14, fontSize: 14, color: '#cbd5e1' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr',
+            gap: 8,
+            padding: '14px',
+            borderRadius: 14,
+            background: 'rgba(15,23,42,0.65)',
+            border: '1px solid rgba(148,163,184,0.16)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ color: '#94a3b8', lineHeight: 1.4 }}>Withdrawal amount</span>
+              <strong style={{ color: '#f8fafc', fontSize: 16, textAlign: 'right' }}>
+                {formatRequirementAmount(parsedAmountMinor || 0)}
+              </strong>
+            </div>
+            {stage === 'upgrade' && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <span style={{ color: '#94a3b8', lineHeight: 1.4 }}>{getWithdrawalRequirementCopy(stage).amountLabel}</span>
+                <strong style={{ color: '#f8fafc', textAlign: 'right' }}>{upgradeAmountLabel}</strong>
+              </div>
+            )}
+            {stage === 'processing_fee' && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <span style={{ color: '#94a3b8', lineHeight: 1.4 }}>{getWithdrawalRequirementCopy(stage).amountLabel}</span>
+                <strong style={{ color: '#f8fafc', textAlign: 'right' }}>
+                  {formatRequirementAmount(requirementAmounts.processingFeeMinor)}
+                </strong>
+              </div>
+            )}
+          </div>
           {withdrawalRequirement.reason && (
-            <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{withdrawalRequirement.reason}</p>
+            <div style={{
+              padding: '14px',
+              borderRadius: 14,
+              border: '1px solid rgba(148,163,184,0.16)',
+              background: '#071a2e',
+            }}>
+              <p style={{
+                margin: 0,
+                whiteSpace: 'pre-wrap',
+                lineHeight: 1.6,
+                color: '#cbd5e1',
+              }}>
+                {withdrawalRequirement.reason}
+              </p>
+            </div>
           )}
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, paddingTop: 2 }}>
             <Button onClick={() => setRequirementOpen(false)} variant="secondary" fullWidth>Close</Button>
             <Button
               onClick={() => {
